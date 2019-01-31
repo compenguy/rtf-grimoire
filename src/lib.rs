@@ -14,15 +14,19 @@ enum Control {
     Bin(Vec<u8>),
 }
 
+/* Helper function for converting nom's CompleteByteSlice input into &str */
 fn complete_byte_slice_to_str<'a>(s: CompleteByteSlice<'a>) -> Result<&'a str, std::str::Utf8Error> {
     std::str::from_utf8(s.0)
 }
 
-fn str_to_int<'a>(s: &'a str, sign: Option<char>) -> Result<i32, std::num::ParseIntError> {
+/* Helper function for converting &str into a signed int
+ * NOTE: This helper function supports both '+' and '-', while the parser only checks for '-'
+ */
+fn str_to_int<'a>(s: &'a str, sign: Option<&str>) -> Result<i32, std::num::ParseIntError> {
     s.parse::<i32>()
         .map(|x| x * sign.map_or(1, |x| match x {
-            '-' => -1,
-            '+' => 1,
+            "-" => -1,
+            "+" => 1,
             _   => panic!("Unsupported integer sign char: {}", x)
         }))
 }
@@ -39,30 +43,30 @@ named!(control<&[u8], Control>,
 
 named!(control_symbol<CompleteByteSlice, Control>,
     map!(
-        pair!(char!('\\'), none_of!("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")),
+        pair!(tag!("\\"), none_of!("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")),
         |(_, x)| Control::Symbol(x)
     )
 );
 
-/*
 named!(control_word<CompleteByteSlice, Control>,
     do_parse!(
-        char!('\\')
+        tag!("\\")
         >> name: map_res!(nom::alpha, complete_byte_slice_to_str)
-        >> arg: opt!(map_res!(signed_int))
-        >> Control::Word { name: name, arg: arg }
+        >> arg: opt!(signed_int)
+        >> (Control::Word { name: String::from(name), arg: arg })
     )
 );
-*/
 
-named!(maybe_signed_int<CompleteByteSlice, &str>,
-    /* TODO: switch to function that calls signed int, and parses it out to an i32 */
-    map_res!(recognize!(signed_int), complete_byte_slice_to_str)
+named!(signed_int<CompleteByteSlice, i32>,
+    map_res!(
+        signed_int_str,
+        |(sign, value)| { str_to_int(value, sign) }
+    )
 );
 
-named!(signed_int<CompleteByteSlice, (Option<&str>, &str)>,
+named!(signed_int_str<CompleteByteSlice, (Option<&str>, &str)>,
     pair!(
-        opt!(map_res!(alt!(tag!("+") | tag!("-")), complete_byte_slice_to_str)),
+        opt!(map_res!(tag!("-"), complete_byte_slice_to_str)),
         map_res!(digit, complete_byte_slice_to_str)
     )
 );
@@ -102,33 +106,32 @@ mod tests {
         assert_eq!(syms, Ok((syms_after_parse,valid_syms)));
     }
 
-    named!(signed_ints<CompleteByteSlice, Vec<&str> >, separated_list_complete!(tag!(","), maybe_signed_int));
+    named!(signed_ints<CompleteByteSlice, Vec<i32> >, separated_list_complete!(tag!(","), signed_int));
 
     #[test]
     fn test_signed_int() {
         let ints_str = CompleteByteSlice(br#"1,0,10,-15,-32765,16328,-73,-0"#);
-        let valid_ints = vec![ "1", "0", "10", "-15", "-32765", "16328", "-73", "-0" ];
+        let valid_ints = vec![ 1, 0, 10, -15, -32765, 16328, -73, 0 ];
         let ints_after_parse = CompleteByteSlice(b"");
         let ints = signed_ints(ints_str);
         assert_eq!(ints, Ok((ints_after_parse,valid_ints)));
     }
-    /*
+
     named!(control_words<CompleteByteSlice, Vec<Control> >, many1!(control_word));
 
     #[test]
     fn test_control_word() {
         let words_str = CompleteByteSlice(br#"\par\b0\b\uncle\foo-5\applepi314159"#);
         let valid_words = vec![
-            Control::Word { name: "par", arg: None },
-            Control::Word { name: "b", arg: Some(0) },
-            Control::Word { name: "b", arg: None },
-            Control::Word { name: "uncle", arg: None },
-            Control::Word { name: "foo", arg: Some(-5) },
-            Control::Word { name: "applepi", arg: Some(314159) },
+            Control::Word { name: "par".to_string(), arg: None },
+            Control::Word { name: "b".to_string(), arg: Some(0) },
+            Control::Word { name: "b".to_string(), arg: None },
+            Control::Word { name: "uncle".to_string(), arg: None },
+            Control::Word { name: "foo".to_string(), arg: Some(-5) },
+            Control::Word { name: "applepi".to_string(), arg: Some(314159) },
         ];
         let words_after_parse = CompleteByteSlice(b"");
-        let words = control_symbols(words_str);
+        let words = control_words(words_str);
         assert_eq!(words, Ok((words_after_parse,valid_words)));
     }
-    */
 }
