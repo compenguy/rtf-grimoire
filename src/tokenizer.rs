@@ -1,13 +1,13 @@
-/// RTF document format tokenizer
-///
-/// Written according to the RTF Format Specification 1.9.1, which carries
-/// the following copyright notice:
-///
-///     Copyright (c) 2008 Microsoft Corporation.  All Rights reserved.
-///
+// RTF document format tokenizer
+//
+// Written according to the RTF Format Specification 1.9.1, which carries
+// the following copyright notice:
+//
+//     Copyright (c) 2008 Microsoft Corporation.  All Rights reserved.
+//
 
-use nom::{digit, crlf};
 use nom::types::CompleteByteSlice;
+use nom::{crlf, digit};
 
 #[derive(PartialEq)]
 pub enum Control {
@@ -20,11 +20,16 @@ impl std::fmt::Debug for Control {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Control::Symbol(c) => write!(f, "Control::Symbol({})", c),
-            Control::Word { name, arg } => write!(f, "Control::Word({}{})", name, arg.map(|i| format!(":{}", i)).unwrap_or("".to_string())),
+            Control::Word { name, arg } => write!(
+                f,
+                "Control::Word({}{})",
+                name,
+                arg.map(|i| format!(":{}", i)).unwrap_or("".to_string())
+            ),
             Control::Bin(data) => {
-                write!(f, "Control::Bin(");
+                write!(f, "Control::Bin(")?;
                 for byte in data {
-                    write!(f, " {:02x?}", byte);
+                    write!(f, " {:02x?}", byte)?;
                 }
                 write!(f, ")")
             }
@@ -51,12 +56,17 @@ impl Control {
 }
 
 // Helper function for converting nom's CompleteByteSlice input into &str
-fn complete_byte_slice_to_str(s: CompleteByteSlice) -> Result<&str, std::str::Utf8Error> {
+pub(crate) fn complete_byte_slice_to_str(
+    s: CompleteByteSlice,
+) -> Result<&str, std::str::Utf8Error> {
     std::str::from_utf8(s.0)
 }
 
 // Helper function for converting &str into a signed int
-fn str_to_int<'a>(s: &'a str, sign: Option<&str>) -> Result<i32, std::num::ParseIntError> {
+pub(crate) fn str_to_int<'a>(
+    s: &'a str,
+    sign: Option<&str>,
+) -> Result<i32, std::num::ParseIntError> {
     s.parse::<i32>().map(|x| {
         x * sign.map_or(1, |x| match x {
             "-" => -1,
@@ -78,15 +88,12 @@ named!(control_symbol<CompleteByteSlice, Control>,
 );
 
 named!(control_word<CompleteByteSlice, Control>,
-    map!(
-        preceded!(
-            tag!("\\"),
-            pair!(
-                map_res!(nom::alpha, complete_byte_slice_to_str),
-                opt!(map!(pair!(signed_int, opt!(tag!(" "))), |(s, _)| s))
-            )
-        ),
-        |(name, arg)| Control::Word { name: String::from(name), arg: arg }
+    do_parse!(
+        tag!("\\") >>
+        name: map_res!(nom::alpha, complete_byte_slice_to_str) >>
+        arg: opt!(signed_int) >>
+        opt!(tag!(" ")) >>
+        (Control::Word { name: String::from(name), arg: arg })
     )
 );
 
@@ -138,12 +145,12 @@ impl std::fmt::Debug for GroupContent {
             GroupContent::Group(g) => write!(f, "\nGroupContent::Group({:?})", g),
             GroupContent::Newline => write!(f, "\nGroupContent::Newline"),
             GroupContent::Text(bytes) => {
-                write!(f, "\nGroupContent::Text(\"");
+                write!(f, "\nGroupContent::Text(\"")?;
                 for byte in bytes {
-                    write!(f, "{}", *byte as char);
+                    write!(f, "{}", *byte as char)?;
                 }
                 write!(f, "\")")
-            },
+            }
         }
     }
 }
@@ -332,26 +339,46 @@ mod tests {
     #[test]
     fn test_group_content() {
         // Have to be very careful here to insert crlf, regardless of host platform
-        let group_content_str = CompleteByteSlice(b"\\b Hello World \\b0 \\par\r\nThis is a test {\\*\\nothing}");
+        let group_content_str =
+            CompleteByteSlice(b"\\b Hello World \\b0 \\par\r\nThis is a test {\\*\\nothing}");
         let valid_group_content = vec![
-            GroupContent::Control(Control::Word { name: "b".to_string(), arg: None }),
+            GroupContent::Control(Control::Word {
+                name: "b".to_string(),
+                arg: None,
+            }),
             GroupContent::Text(b"Hello World ".to_vec()),
-            GroupContent::Control(Control::Word { name: "b".to_string(), arg: Some(0) }),
-            GroupContent::Control(Control::Word { name: "par".to_string(), arg: None }),
+            GroupContent::Control(Control::Word {
+                name: "b".to_string(),
+                arg: Some(0),
+            }),
+            GroupContent::Control(Control::Word {
+                name: "par".to_string(),
+                arg: None,
+            }),
             GroupContent::Newline,
             GroupContent::Text(b"This is a test ".to_vec()),
-            GroupContent::Group(
-                Group(
-                    vec![
-                        GroupContent::Control(Control::Symbol('*')),
-                        GroupContent::Control(Control::Word { name: "nothing".to_string(), arg: None })
-                    ]
-                )
-            ),
+            GroupContent::Group(Group(vec![
+                GroupContent::Control(Control::Symbol('*')),
+                GroupContent::Control(Control::Word {
+                    name: "nothing".to_string(),
+                    arg: None,
+                }),
+            ])),
         ];
         let group_content_after_parse = CompleteByteSlice(b"");
         let group_content = group_content_list(group_content_str);
-        assert_eq!(group_content, Ok((group_content_after_parse, valid_group_content)));
+        assert_eq!(
+            group_content,
+            Ok((group_content_after_parse, valid_group_content))
+        );
     }
 
+    #[test]
+    fn test_sample_doc() {
+        let test_bytes = CompleteByteSlice(include_bytes!("../tests/sample.rtf"));
+        match document(test_bytes) {
+            Ok((unparsed, _)) => assert_eq!(unparsed.len(), 0, "Unparsed data: {:?}", unparsed),
+            Err(e) => panic!("Parsing error: {:?}", e),
+        }
+    }
 }
