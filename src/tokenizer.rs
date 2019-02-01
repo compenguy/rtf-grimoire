@@ -1,11 +1,35 @@
+/// RTF document format tokenizer
+///
+/// Written according to the RTF Format Specification 1.9.1, which carries
+/// the following copyright notice:
+///
+///     Copyright (c) 2008 Microsoft Corporation.  All Rights reserved.
+///
+
 use nom::{digit, crlf};
 use nom::types::CompleteByteSlice;
 
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 pub enum Control {
     Symbol(char),
     Word { name: String, arg: Option<i32> },
     Bin(Vec<u8>),
+}
+
+impl std::fmt::Debug for Control {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Control::Symbol(c) => write!(f, "Control::Symbol({})", c),
+            Control::Word { name, arg } => write!(f, "Control::Word({}{})", name, arg.map(|i| format!(":{}", i)).unwrap_or("".to_string())),
+            Control::Bin(data) => {
+                write!(f, "Control::Bin(");
+                for byte in data {
+                    write!(f, " {:02x?}", byte);
+                }
+                write!(f, ")")
+            }
+        }
+    }
 }
 
 impl Control {
@@ -99,7 +123,7 @@ named!(control_bin<CompleteByteSlice, Control>,
 // Text is not str because it can be in any of various encodings -
 // it's up to the processor to identify any encoding information in
 // the stream, and do any encoding conversion desired
-#[derive(Debug)]
+#[derive(PartialEq)]
 pub enum GroupContent {
     Control(Control),
     Group(Group),
@@ -107,41 +131,60 @@ pub enum GroupContent {
     Newline,
 }
 
-/*
-named!(group_content<CompleteByteSlice, GroupContent>,
-    alt!(control_content | group_content | newline_content | rtf_text_content)
-);
-*/
+impl std::fmt::Debug for GroupContent {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            GroupContent::Control(c) => write!(f, "\nGroupContent::Control({:?})", c),
+            GroupContent::Group(g) => write!(f, "\nGroupContent::Group({:?})", g),
+            GroupContent::Newline => write!(f, "\nGroupContent::Newline"),
+            GroupContent::Text(bytes) => {
+                write!(f, "\nGroupContent::Text(\"");
+                for byte in bytes {
+                    write!(f, "{}", *byte as char);
+                }
+                write!(f, "\")")
+            },
+        }
+    }
+}
 
-named!(control_content<CompleteByteSlice, GroupContent>,
+named!(group_content<CompleteByteSlice, GroupContent>,
+    alt!(group_content_control | group_content_group | group_content_newline | group_content_rtf_text)
+);
+
+named!(group_content_control<CompleteByteSlice, GroupContent>,
     map!(
         control,
         |control_token| GroupContent::Control(control_token)
     )
 );
 
-named!(group_content<CompleteByteSlice, GroupContent>,
+named!(group_content_group<CompleteByteSlice, GroupContent>,
     map!(
         group,
         |group_token| GroupContent::Group(group_token)
     )
 );
 
-named!(newline_content<CompleteByteSlice, GroupContent>,
+named!(group_content_newline<CompleteByteSlice, GroupContent>,
     map!(
         crlf,
         |_| GroupContent::Newline
     )
 );
 
-named!(rtf_text_content<CompleteByteSlice, GroupContent>,
+// If the character is anything other than an opening brace ({), closing brace (}), backslash (\),
+// or a CRLF (carriage return/line feed), the reader assumes that the character is plain text and
+// writes the character to the current destination using the current formatting properties.
+// See section "Conventions of an RTF Reader"
+named!(group_content_rtf_text<CompleteByteSlice, GroupContent>,
     map!(
-        recognize!(many0!(none_of!("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"))),
+        recognize!(many0!(alt!(none_of!("\\}{\r\n")))),
         |text_bytes| GroupContent::Text(text_bytes.to_vec())
     )
 );
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Group(Vec<GroupContent>);
 
 named!(group<CompleteByteSlice, Group>,
@@ -155,7 +198,7 @@ named!(group<CompleteByteSlice, Group>,
     )
 );
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Document(Vec<GroupContent>);
 
 named!(document<CompleteByteSlice, Document>,
@@ -283,4 +326,32 @@ mod tests {
         let controls = controls(controls_str);
         assert_eq!(controls, Ok((controls_after_parse, valid_controls)));
     }
+
+    named!(group_content_list<CompleteByteSlice, Vec<GroupContent> >, many1!(group_content));
+
+    #[test]
+    fn test_group_content() {
+        // Have to be very careful here to insert crlf, regardless of host platform
+        let group_content_str = CompleteByteSlice(b"\\b Hello World \\b0 \\par\r\nThis is a test {\\*\\nothing}");
+        let valid_group_content = vec![
+            GroupContent::Control(Control::Word { name: "b".to_string(), arg: None }),
+            GroupContent::Text(b"Hello World ".to_vec()),
+            GroupContent::Control(Control::Word { name: "b".to_string(), arg: Some(0) }),
+            GroupContent::Control(Control::Word { name: "par".to_string(), arg: None }),
+            GroupContent::Newline,
+            GroupContent::Text(b"This is a test ".to_vec()),
+            GroupContent::Group(
+                Group(
+                    vec![
+                        GroupContent::Control(Control::Symbol('*')),
+                        GroupContent::Control(Control::Word { name: "nothing".to_string(), arg: None })
+                    ]
+                )
+            ),
+        ];
+        let group_content_after_parse = CompleteByteSlice(b"");
+        let group_content = group_content_list(group_content_str);
+        assert_eq!(group_content, Ok((group_content_after_parse, valid_group_content)));
+    }
+
 }
