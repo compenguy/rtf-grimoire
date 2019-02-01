@@ -1,4 +1,4 @@
-use nom::digit;
+use nom::{digit, crlf};
 use nom::types::CompleteByteSlice;
 
 #[derive(Debug, PartialEq)]
@@ -9,8 +9,16 @@ pub enum Control {
 }
 
 impl Control {
+    pub fn get_name(&self) -> Option<String> {
+        if let Control::Word { ref name, .. } = self {
+            Some(name.clone())
+        } else {
+            None
+        }
+    }
+
     pub fn get_arg(&self) -> Option<i32> {
-        if let Control::Word { arg, .. } = self {
+        if let Control::Word { ref arg, .. } = self {
             *arg
         } else {
             None
@@ -34,28 +42,25 @@ fn str_to_int<'a>(s: &'a str, sign: Option<&str>) -> Result<i32, std::num::Parse
     })
 }
 
-named!(pub control<CompleteByteSlice, Control>,
-    map!(
-        pair!(
-            tag!("\\"),
-            alt!(control_symbol | control_bin | control_word)
-        ),
-        |(_, x)| x
-    )
+named!(control<CompleteByteSlice, Control>,
+    alt!(control_symbol | control_bin | control_word)
 );
 
 named!(control_symbol<CompleteByteSlice, Control>,
     map!(
-        none_of!("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"),
+        preceded!(tag!("\\"), none_of!("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")),
         Control::Symbol
     )
 );
 
 named!(control_word<CompleteByteSlice, Control>,
     map!(
-        pair!(
-            map_res!(nom::alpha, complete_byte_slice_to_str),
-            opt!(map!(pair!(signed_int, opt!(tag!(" "))), |(s, _)| s))
+        preceded!(
+            tag!("\\"),
+            pair!(
+                map_res!(nom::alpha, complete_byte_slice_to_str),
+                opt!(map!(pair!(signed_int, opt!(tag!(" "))), |(s, _)| s))
+            )
         ),
         |(name, arg)| Control::Word { name: String::from(name), arg: arg }
     )
@@ -76,17 +81,91 @@ named!(signed_int_str<CompleteByteSlice, (Option<&str>, &str)>,
 );
 
 named!(control_bin<CompleteByteSlice, Control>,
-    map!(
-        length_bytes!(
+    do_parse!(
+        tag!("\\bin") >>
+        len: opt!(
             map!(
                 pair!(
-                    tag!("bin"),
-                    opt!(map!(pair!(signed_int, opt!(tag!(" "))), |(s, _)| s))
-                ),
-                |(_, arg)| arg.unwrap_or(0)
+                    signed_int,
+                    opt!(tag!(" "))
+                ), |(s, _)| s
             )
+        ) >>
+        out: take!(len.unwrap_or(0)) >>
+        (Control::Bin(out.to_vec()))
+    )
+);
+
+// Text is not str because it can be in any of various encodings -
+// it's up to the processor to identify any encoding information in
+// the stream, and do any encoding conversion desired
+#[derive(Debug)]
+pub enum GroupContent {
+    Control(Control),
+    Group(Group),
+    Text(Vec<u8>),
+    Newline,
+}
+
+/*
+named!(group_content<CompleteByteSlice, GroupContent>,
+    alt!(control_content | group_content | newline_content | rtf_text_content)
+);
+*/
+
+named!(control_content<CompleteByteSlice, GroupContent>,
+    map!(
+        control,
+        |control_token| GroupContent::Control(control_token)
+    )
+);
+
+named!(group_content<CompleteByteSlice, GroupContent>,
+    map!(
+        group,
+        |group_token| GroupContent::Group(group_token)
+    )
+);
+
+named!(newline_content<CompleteByteSlice, GroupContent>,
+    map!(
+        crlf,
+        |_| GroupContent::Newline
+    )
+);
+
+named!(rtf_text_content<CompleteByteSlice, GroupContent>,
+    map!(
+        recognize!(many0!(none_of!("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"))),
+        |text_bytes| GroupContent::Text(text_bytes.to_vec())
+    )
+);
+
+#[derive(Debug)]
+pub struct Group(Vec<GroupContent>);
+
+named!(group<CompleteByteSlice, Group>,
+    map!(
+        delimited!(
+            tag!("{"),
+            many0!(group_content),
+            tag!("}")
         ),
-        |data_tuple| Control::Bin(data_tuple.0.to_vec())
+        |group_content| Group(group_content)
+    )
+);
+
+#[derive(Debug)]
+pub struct Document(Vec<GroupContent>);
+
+named!(document<CompleteByteSlice, Document>,
+    map!(
+        delimited!(
+            tag!("{"),
+            many1!(group_content),
+            tag!("}")
+        ),
+        |doc_content| Document(doc_content)
     )
 );
 
