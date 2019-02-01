@@ -24,7 +24,7 @@ impl std::fmt::Debug for Control {
                 f,
                 "Control::Word({}{})",
                 name,
-                arg.map(|i| format!(":{}", i)).unwrap_or("".to_string())
+                arg.map(|i| format!(":{}", i)).unwrap_or_default()
             ),
             Control::Bin(data) => {
                 write!(f, "Control::Bin(")?;
@@ -56,17 +56,14 @@ impl Control {
 }
 
 // Helper function for converting nom's CompleteByteSlice input into &str
-pub(crate) fn complete_byte_slice_to_str(
-    s: CompleteByteSlice,
-) -> Result<&str, std::str::Utf8Error> {
+#[allow(dead_code)]
+fn complete_byte_slice_to_str(s: CompleteByteSlice) -> Result<&str, std::str::Utf8Error> {
     std::str::from_utf8(s.0)
 }
 
 // Helper function for converting &str into a signed int
-pub(crate) fn str_to_int<'a>(
-    s: &'a str,
-    sign: Option<&str>,
-) -> Result<i32, std::num::ParseIntError> {
+#[allow(dead_code)]
+fn str_to_int<'a>(s: &'a str, sign: Option<&str>) -> Result<i32, std::num::ParseIntError> {
     s.parse::<i32>().map(|x| {
         x * sign.map_or(1, |x| match x {
             "-" => -1,
@@ -162,14 +159,14 @@ named!(group_content<CompleteByteSlice, GroupContent>,
 named!(group_content_control<CompleteByteSlice, GroupContent>,
     map!(
         control,
-        |control_token| GroupContent::Control(control_token)
+        GroupContent::Control
     )
 );
 
 named!(group_content_group<CompleteByteSlice, GroupContent>,
     map!(
         group,
-        |group_token| GroupContent::Group(group_token)
+        GroupContent::Group
     )
 );
 
@@ -201,7 +198,7 @@ named!(group<CompleteByteSlice, Group>,
             many0!(group_content),
             tag!("}")
         ),
-        |group_content| Group(group_content)
+        Group
     )
 );
 
@@ -215,7 +212,7 @@ named!(document<CompleteByteSlice, Document>,
             many1!(group_content),
             tag!("}")
         ),
-        |doc_content| Document(doc_content)
+        Document
     )
 );
 
