@@ -6,11 +6,11 @@
 //     Copyright (c) 2008 Microsoft Corporation.  All Rights reserved.
 //
 
-use nom::types::CompleteByteSlice;
 use nom::digit;
+use nom::types::CompleteByteSlice;
 
-use crate::tokenizer::GroupContent;
 use crate::tokenizer::group_content;
+use crate::tokenizer::GroupContent;
 
 // Helper function for converting nom's CompleteByteSlice input into &str
 #[allow(dead_code)]
@@ -48,7 +48,6 @@ named!(pub signed_int<CompleteByteSlice, i32>,
 named!(pub control_symbol_raw<CompleteByteSlice, char>,
     preceded!(tag!("\\"), none_of!("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"))
 );
-
 
 named!(pub control_word_raw<CompleteByteSlice, (&str, Option<i32>)>,
     do_parse!(

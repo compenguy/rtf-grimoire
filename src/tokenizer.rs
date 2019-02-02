@@ -6,11 +6,11 @@
 //     Copyright (c) 2008 Microsoft Corporation.  All Rights reserved.
 //
 
-use nom::types::CompleteByteSlice;
 use nom::crlf;
+use nom::types::CompleteByteSlice;
 
-use crate::raw::{control_symbol_raw, control_word_raw, control_bin_raw};
-use crate::raw::{rtf_text_raw, group_raw, document_raw};
+use crate::raw::{control_bin_raw, control_symbol_raw, control_word_raw};
+use crate::raw::{document_raw, group_raw, rtf_text_raw};
 
 #[derive(PartialEq)]
 pub enum Control {

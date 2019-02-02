@@ -1,5 +1,5 @@
 #[macro_use]
 extern crate nom;
 
-pub mod tokenizer;
 pub mod raw;
+pub mod tokenizer;
