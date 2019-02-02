@@ -7,7 +7,10 @@
 //
 
 use nom::types::CompleteByteSlice;
-use nom::{crlf, digit};
+use nom::crlf;
+
+use crate::raw::{control_symbol_raw, control_word_raw, control_bin_raw};
+use crate::raw::{rtf_text_raw, group_raw, document_raw};
 
 #[derive(PartialEq)]
 pub enum Control {
@@ -55,72 +58,28 @@ impl Control {
     }
 }
 
-// Helper function for converting nom's CompleteByteSlice input into &str
-#[allow(dead_code)]
-fn complete_byte_slice_to_str(s: CompleteByteSlice) -> Result<&str, std::str::Utf8Error> {
-    std::str::from_utf8(s.0)
-}
-
-// Helper function for converting &str into a signed int
-#[allow(dead_code)]
-fn str_to_int<'a>(s: &'a str, sign: Option<&str>) -> Result<i32, std::num::ParseIntError> {
-    s.parse::<i32>().map(|x| {
-        x * sign.map_or(1, |x| match x {
-            "-" => -1,
-            "+" => 1,
-            _ => panic!("Unsupported integer sign char: {}", x),
-        })
-    })
-}
-
-named!(control<CompleteByteSlice, Control>,
+named!(pub control<CompleteByteSlice, Control>,
     alt!(control_symbol | control_bin | control_word)
 );
 
-named!(control_symbol<CompleteByteSlice, Control>,
+named!(pub control_symbol<CompleteByteSlice, Control>,
     map!(
-        preceded!(tag!("\\"), none_of!("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")),
+        control_symbol_raw,
         Control::Symbol
     )
 );
 
-named!(control_word<CompleteByteSlice, Control>,
-    do_parse!(
-        tag!("\\") >>
-        name: map_res!(nom::alpha, complete_byte_slice_to_str) >>
-        arg: opt!(signed_int) >>
-        opt!(tag!(" ")) >>
-        (Control::Word { name: String::from(name), arg: arg })
+named!(pub control_word<CompleteByteSlice, Control>,
+    map!(
+        control_word_raw,
+        |(name, arg)| Control::Word { name: String::from(name), arg }
     )
 );
 
-named!(signed_int<CompleteByteSlice, i32>,
-    map_res!(
-        signed_int_str,
-        |(sign, value)| { str_to_int(value, sign) }
-    )
-);
-
-named!(signed_int_str<CompleteByteSlice, (Option<&str>, &str)>,
-    pair!(
-        opt!(map_res!(tag!("-"), complete_byte_slice_to_str)),
-        map_res!(digit, complete_byte_slice_to_str)
-    )
-);
-
-named!(control_bin<CompleteByteSlice, Control>,
-    do_parse!(
-        tag!("\\bin") >>
-        len: opt!(
-            map!(
-                pair!(
-                    signed_int,
-                    opt!(tag!(" "))
-                ), |(s, _)| s
-            )
-        ) >>
-        out: take!(len.unwrap_or(0)) >>
-        (Control::Bin(out.to_vec()))
+named!(pub control_bin<CompleteByteSlice, Control>,
+    map!(
+        control_bin_raw,
+        |bytes| Control::Bin(bytes.to_vec())
     )
 );
 
@@ -152,25 +111,25 @@ impl std::fmt::Debug for GroupContent {
     }
 }
 
-named!(group_content<CompleteByteSlice, GroupContent>,
+named!(pub group_content<CompleteByteSlice, GroupContent>,
     alt!(group_content_control | group_content_group | group_content_newline | group_content_rtf_text)
 );
 
-named!(group_content_control<CompleteByteSlice, GroupContent>,
+named!(pub group_content_control<CompleteByteSlice, GroupContent>,
     map!(
         control,
         GroupContent::Control
     )
 );
 
-named!(group_content_group<CompleteByteSlice, GroupContent>,
+named!(pub group_content_group<CompleteByteSlice, GroupContent>,
     map!(
         group,
         GroupContent::Group
     )
 );
 
-named!(group_content_newline<CompleteByteSlice, GroupContent>,
+named!(pub group_content_newline<CompleteByteSlice, GroupContent>,
     map!(
         crlf,
         |_| GroupContent::Newline
@@ -181,9 +140,9 @@ named!(group_content_newline<CompleteByteSlice, GroupContent>,
 // or a CRLF (carriage return/line feed), the reader assumes that the character is plain text and
 // writes the character to the current destination using the current formatting properties.
 // See section "Conventions of an RTF Reader"
-named!(group_content_rtf_text<CompleteByteSlice, GroupContent>,
+named!(pub group_content_rtf_text<CompleteByteSlice, GroupContent>,
     map!(
-        recognize!(many0!(alt!(none_of!("\\}{\r\n")))),
+        rtf_text_raw,
         |text_bytes| GroupContent::Text(text_bytes.to_vec())
     )
 );
@@ -191,13 +150,9 @@ named!(group_content_rtf_text<CompleteByteSlice, GroupContent>,
 #[derive(Debug, PartialEq)]
 pub struct Group(Vec<GroupContent>);
 
-named!(group<CompleteByteSlice, Group>,
+named!(pub group<CompleteByteSlice, Group>,
     map!(
-        delimited!(
-            tag!("{"),
-            many0!(group_content),
-            tag!("}")
-        ),
+        group_raw,
         Group
     )
 );
@@ -205,13 +160,9 @@ named!(group<CompleteByteSlice, Group>,
 #[derive(Debug, PartialEq)]
 pub struct Document(Vec<GroupContent>);
 
-named!(document<CompleteByteSlice, Document>,
+named!(pub document<CompleteByteSlice, Document >,
     map!(
-        delimited!(
-            tag!("{"),
-            many1!(group_content),
-            tag!("}")
-        ),
+        document_raw,
         Document
     )
 );
@@ -373,6 +324,16 @@ mod tests {
     #[test]
     fn test_sample_doc() {
         let test_bytes = CompleteByteSlice(include_bytes!("../tests/sample.rtf"));
+        match document(test_bytes) {
+            Ok((unparsed, _)) => assert_eq!(unparsed.len(), 0, "Unparsed data: {:?}", unparsed),
+            Err(e) => panic!("Parsing error: {:?}", e),
+        }
+    }
+
+    // The spec doc is interested because it has unmatched "{}" groups
+    #[test]
+    fn test_spec_doc() {
+        let test_bytes = CompleteByteSlice(include_bytes!("../tests/RTF-Spec-1.7.rtf"));
         match document(test_bytes) {
             Ok((unparsed, _)) => assert_eq!(unparsed.len(), 0, "Unparsed data: {:?}", unparsed),
             Err(e) => panic!("Parsing error: {:?}", e),
