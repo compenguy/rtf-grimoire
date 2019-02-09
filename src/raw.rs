@@ -6,15 +6,13 @@
 //     Copyright (c) 2008 Microsoft Corporation.  All Rights reserved.
 //
 
+use nom::crlf;
 use nom::digit;
-use nom::types::CompleteByteSlice;
 
-use crate::tokenizer::group_content;
-use crate::tokenizer::GroupContent;
+use nom::types::CompleteByteSlice as Input;
 
-// Helper function for converting nom's CompleteByteSlice input into &str
-#[allow(dead_code)]
-fn complete_byte_slice_to_str(s: CompleteByteSlice) -> Result<&str, std::str::Utf8Error> {
+// Helper function to convert from Input to &str
+fn input_to_str(s: Input) -> Result<&str, std::str::Utf8Error> {
     std::str::from_utf8(s.0)
 }
 
@@ -31,35 +29,35 @@ fn str_to_int<'a>(s: &'a str, sign: Option<&str>) -> Result<i32, std::num::Parse
 }
 
 // Helper function for parsing signed integers
-named!(pub signed_int_raw<CompleteByteSlice, (Option<&str>, &str)>,
+named!(pub signed_int_raw<Input, (Option<&str>, &str)>,
     pair!(
-        opt!(map_res!(tag!("-"), complete_byte_slice_to_str)),
-        map_res!(digit, complete_byte_slice_to_str)
+        opt!(map_res!(tag!("-"), input_to_str)),
+        map_res!(digit, input_to_str)
     )
 );
 
-named!(pub signed_int<CompleteByteSlice, i32>,
+named!(signed_int<Input, i32>,
     map_res!(
         signed_int_raw,
         |(sign, value)| { str_to_int(value, sign) }
     )
 );
 
-named!(pub control_symbol_raw<CompleteByteSlice, char>,
+named!(pub control_symbol_raw<Input, char>,
     preceded!(tag!("\\"), none_of!("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"))
 );
 
-named!(pub control_word_raw<CompleteByteSlice, (&str, Option<i32>)>,
+named!(pub control_word_raw<Input, (&str, Option<i32>)>,
     do_parse!(
         tag!("\\") >>
-        name: map_res!(nom::alpha, complete_byte_slice_to_str) >>
+        name: map_res!(nom::alpha, input_to_str) >>
         arg: opt!(signed_int) >>
         opt!(tag!(" ")) >>
         (name, arg)
     )
 );
 
-named!(pub control_bin_raw<CompleteByteSlice, CompleteByteSlice>,
+named!(pub control_bin_raw<Input, &[u8]>,
     do_parse!(
         tag!("\\bin") >>
         len: opt!(
@@ -71,7 +69,7 @@ named!(pub control_bin_raw<CompleteByteSlice, CompleteByteSlice>,
             )
         ) >>
         out: take!(len.unwrap_or(0)) >>
-        (out)
+        (&out)
     )
 );
 
@@ -79,42 +77,43 @@ named!(pub control_bin_raw<CompleteByteSlice, CompleteByteSlice>,
 // or a CRLF (carriage return/line feed), the reader assumes that the character is plain text and
 // writes the character to the current destination using the current formatting properties.
 // See section "Conventions of an RTF Reader"
-named!(pub rtf_text_raw<CompleteByteSlice, CompleteByteSlice>,
-    recognize!(many0!(alt!(none_of!("\\}{\r\n"))))
-);
-
-named!(pub group_raw<CompleteByteSlice, Vec<GroupContent> >,
-    alt!(
-        delimited!(
-            tag!("{"),
-            many0!(group_content),
-            tag!("}")
-        ) |
-        preceded!(
-            tag!("{"),
-            many1!(group_content)
-        )
+named!(pub rtf_text_raw<Input, &[u8]>,
+    map!(
+        recognize!(many0!(alt!(none_of!("\\}{\r\n")))),
+        |i| i.0
     )
 );
 
-named!(pub document_raw<CompleteByteSlice, Vec<GroupContent> >,
-    ws!(group_raw)
+named!(pub start_group_raw<Input, char>,
+    char!('{')
+);
+
+named!(pub end_group_raw<Input, char>,
+    char!('}')
+);
+
+// Oddly enough, the copy of the RTF spec we have has at least one carriage return without its
+// matching line feed, so it looks like we need to be more permissive about newlines than the spec
+// says.
+named!(pub newline_raw<Input, &[u8]>,
+    map!(
+        alt!(crlf | tag!("\n") | tag!("\r")),
+        |i| i.0
+    )
 );
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    use nom::types::CompleteByteSlice;
-
-    named!(signed_ints<CompleteByteSlice, Vec<i32> >, separated_list_complete!(tag!(","), signed_int));
+    named!(signed_ints<Input, Vec<i32> >, separated_list_complete!(tag!(","), signed_int));
 
     #[test]
     fn test_signed_int() {
-        let ints_str = CompleteByteSlice(br#"1,0,10,-15,-32765,16328,-73,-0"#);
+        let ints_str = br#"1,0,10,-15,-32765,16328,-73,-0"#;
         let valid_ints = vec![1, 0, 10, -15, -32765, 16328, -73, 0];
-        let ints_after_parse = CompleteByteSlice(b"");
-        let ints = signed_ints(ints_str);
+        let ints_after_parse = Input(b"");
+        let ints = signed_ints(Input(ints_str));
         assert_eq!(ints, Ok((ints_after_parse, valid_ints)));
     }
 }
