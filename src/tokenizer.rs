@@ -24,6 +24,18 @@ impl<I> std::convert::From<nom::Err<I, u32>> for ParseError {
     }
 }
 
+impl std::error::Error for ParseError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        None
+    }
+}
+
+impl std::fmt::Display for ParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "Parser Error: {}", self.inner.description())
+    }
+}
+
 type Result<T> = std::result::Result<T, ParseError>;
 
 #[derive(PartialEq)]
