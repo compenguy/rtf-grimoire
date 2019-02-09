@@ -189,17 +189,6 @@ mod tests {
         assert_eq!(syms, Ok((syms_after_parse, valid_syms)));
     }
 
-    named!(signed_ints<CompleteByteSlice, Vec<i32> >, separated_list_complete!(tag!(","), signed_int));
-
-    #[test]
-    fn test_signed_int() {
-        let ints_str = CompleteByteSlice(br#"1,0,10,-15,-32765,16328,-73,-0"#);
-        let valid_ints = vec![1, 0, 10, -15, -32765, 16328, -73, 0];
-        let ints_after_parse = CompleteByteSlice(b"");
-        let ints = signed_ints(ints_str);
-        assert_eq!(ints, Ok((ints_after_parse, valid_ints)));
-    }
-
     #[test]
     fn test_control_word() {
         let words_str = CompleteByteSlice(br#"\par\b0\b\uncle\foo-5\applepi314159"#);
