@@ -8,6 +8,7 @@
 
 use nom::crlf;
 use nom::digit;
+use nom::is_hex_digit;
 
 use nom::types::CompleteByteSlice as Input;
 
@@ -28,12 +29,27 @@ fn str_to_int<'a>(s: &'a str, sign: Option<&str>) -> Result<i32, std::num::Parse
     })
 }
 
+// Helper function for converting hex &str into a u8
+#[allow(dead_code)]
+fn hex_str_to_int(s: &str) -> Result<u8, std::num::ParseIntError> {
+    u8::from_str_radix(s, 16)
+}
+
 // Helper function for parsing signed integers
 named!(pub signed_int_raw<Input, (Option<&str>, &str)>,
     pair!(
         opt!(map_res!(tag!("-"), input_to_str)),
         map_res!(digit, input_to_str)
     )
+);
+
+// Helper function for parsing hexadecimal bytes
+named!(pub hexbyte_raw<Input, &str>,
+    map_res!(take_while_m_n!(2, 2, is_hex_digit), input_to_str)
+);
+
+named!(pub hexbyte<Input, u8>,
+    map_res!(hexbyte_raw, hex_str_to_int)
 );
 
 named!(signed_int<Input, i32>,
@@ -52,6 +68,16 @@ named!(pub control_word_raw<Input, (&str, Option<i32>)>,
         tag!("\\") >>
         name: map_res!(nom::alpha, input_to_str) >>
         arg: opt!(signed_int) >>
+        opt!(tag!(" ")) >>
+        (name, arg)
+    )
+);
+
+named!(pub control_word_hexbyte_raw<Input, (&str, Option<i32>)>,
+    do_parse!(
+        tag!("\\") >>
+        name: map_res!(tag!("'"), input_to_str) >>
+        arg: map!(hexbyte, |x| Some(x as i32)) >>
         opt!(tag!(" ")) >>
         (name, arg)
     )
