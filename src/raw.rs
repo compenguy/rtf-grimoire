@@ -73,12 +73,13 @@ named!(pub control_word_raw<Input, (&str, Option<i32>)>,
     )
 );
 
+// Sample.rtf's contents and rendering suggest that \'XX *doesn't* absorb a trailing space
+// like other control words do
 named!(pub control_word_hexbyte_raw<Input, (&str, Option<i32>)>,
     do_parse!(
         tag!("\\") >>
         name: map_res!(tag!("'"), input_to_str) >>
         arg: map!(hexbyte, |x| Some(x as i32)) >>
-        opt!(tag!(" ")) >>
         (name, arg)
     )
 );
