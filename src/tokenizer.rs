@@ -6,7 +6,7 @@
 //     Copyright (c) 2008 Microsoft Corporation.  All Rights reserved.
 //
 
-use crate::raw::{control_bin_raw, control_symbol_raw, control_word_raw};
+use crate::raw::{control_bin_raw, control_symbol_raw, control_word_hexbyte_raw, control_word_raw};
 use crate::raw::{end_group_raw, newline_raw, rtf_text_raw, start_group_raw};
 
 use nom::types::CompleteByteSlice as Input;
@@ -179,11 +179,19 @@ impl Token {
 // If the next unparsed character is anything other than an opening brace ({), closing brace (}),
 // backslash (\), or a CRLF (carriage return/line feed), the reader assumes that the character is
 // plain text and writes the character to the current destination using the current formatting
-// properties.
+// properties.  Finally, a control hexbyte is a special case of a control symbol, but needs to be
+// handled specially, so hexbyte should be tested for before control symbols.
 //
 // See section "Conventions of an RTF Reader" in the RTF specification.
 named!(pub read_token<Input, Token>,
-    alt!(read_control_symbol | read_control_bin | read_control_word | read_start_group | read_end_group | read_newline | read_rtf_text)
+    alt!(read_control_hexbyte | read_control_symbol | read_control_bin | read_control_word | read_start_group | read_end_group | read_newline | read_rtf_text)
+);
+
+named!(pub read_control_hexbyte<Input, Token>,
+    map!(
+        control_word_hexbyte_raw,
+        |(name, arg)| Token::ControlWord { name: String::from(name), arg }
+    )
 );
 
 named!(pub read_control_symbol<Input, Token>,
