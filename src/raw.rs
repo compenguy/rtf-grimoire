@@ -60,7 +60,7 @@ named!(signed_int<Input, i32>,
 );
 
 named!(pub control_symbol_raw<Input, char>,
-    preceded!(tag!("\\"), none_of!("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"))
+    preceded!(tag!("\\"), none_of!("'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"))
 );
 
 named!(pub control_word_raw<Input, (&str, Option<i32>)>,
