@@ -6,6 +6,8 @@
 //     Copyright (c) 2008 Microsoft Corporation.  All Rights reserved.
 //
 
+use std;
+
 use nom::crlf;
 use nom::digit;
 use nom::is_hex_digit;
