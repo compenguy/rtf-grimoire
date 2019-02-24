@@ -6,6 +6,7 @@
 //     Copyright (c) 2008 Microsoft Corporation.  All Rights reserved.
 //
 
+use std;
 use raw::{control_bin_raw, control_symbol_raw, control_word_hexbyte_raw, control_word_raw};
 use raw::{end_group_raw, newline_raw, rtf_text_raw, start_group_raw};
 

@@ -7,6 +7,7 @@
 //
 
 use std;
+use nom;
 
 use nom::crlf;
 use nom::digit;
