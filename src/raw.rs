@@ -328,4 +328,36 @@ mod tests {
         let error_kind = ErrorKind::TakeWhileMN;
         assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, error_kind))), control_word_hexbyte_raw(input));
     }
+
+    #[test]
+    fn test_control_bin_raw() {
+        let input = Input(br#"\bin2ABCD"#);
+        let remaining_input = Input(br#"CD"#);
+        let parsed_output = &b"AB"[..];
+        assert_eq!(Ok((remaining_input, parsed_output)), control_bin_raw(input));
+    }
+
+    #[test]
+    fn test_control_bin_raw_space() {
+        let input = Input(br#"\bin2 ABCD"#);
+        let remaining_input = Input(br#"CD"#);
+        let parsed_output = &b"AB"[..];
+        assert_eq!(Ok((remaining_input, parsed_output)), control_bin_raw(input));
+    }
+
+    #[test]
+    fn test_control_bin_raw_no_len() {
+        let input = Input(br#"\binABCD"#);
+        let remaining_input = Input(br#"ABCD"#);
+        let parsed_output = &b""[..];
+        assert_eq!(Ok((remaining_input, parsed_output)), control_bin_raw(input));
+    }
+
+    #[test]
+    fn test_control_bin_raw_invalid_tag() {
+        let input = Input(br#"\abcABCD"#);
+        let remaining_input = Input(br#"\abcABCD"#);
+        let error_kind = ErrorKind::Tag;
+        assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, error_kind))), control_bin_raw(input));
+    }
 }
