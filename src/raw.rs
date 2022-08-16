@@ -134,9 +134,41 @@ named!(pub newline_raw<Input, &[u8]>,
 
 #[cfg(test)]
 mod tests {
+    use nom::ErrorKind;
     use super::*;
 
     named!(signed_ints<Input, Vec<i32> >, separated_list_complete!(tag!(","), signed_int));
+
+    #[test]
+    fn test_hexbyte_raw_upper() {
+        let input = Input(b"0F4E");
+        let parsed_output = "0F";
+        let remaining_input = Input(b"4E");
+        assert_eq!(Ok((remaining_input, parsed_output)), hexbyte_raw(input));
+    }
+
+    #[test]
+    fn test_hexbyte_raw_lower() {
+        let input = Input(b"4e0f");
+        let parsed_output = "4e";
+        let remaining_input = Input(b"0f");
+        assert_eq!(Ok((remaining_input, parsed_output)), hexbyte_raw(input));
+    }
+
+    #[test]
+    fn test_hexbyte_raw_invalid_first() {
+        let input = Input(b"ge0f");
+        let remaining_input = Input(b"ge0f");
+        assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, ErrorKind::TakeWhileMN))), hexbyte_raw(input));
+    }
+
+    #[test]
+    fn test_hexbyte_raw_invalid_second() {
+        let input = Input(b"eg0f");
+        let remaining_input = Input(b"eg0f");
+        assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, ErrorKind::TakeWhileMN))), hexbyte_raw(input));
+    }
+
 
     #[test]
     fn test_signed_int() {
