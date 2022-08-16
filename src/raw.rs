@@ -137,8 +137,6 @@ mod tests {
     use nom::ErrorKind;
     use super::*;
 
-    named!(signed_ints<Input, Vec<i32> >, separated_list_complete!(tag!(","), signed_int));
-
     #[test]
     fn test_hexbyte_raw_upper() {
         let input = Input(b"0F4E");
@@ -167,15 +165,5 @@ mod tests {
         let input = Input(b"eg0f");
         let remaining_input = Input(b"eg0f");
         assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, ErrorKind::TakeWhileMN))), hexbyte_raw(input));
-    }
-
-
-    #[test]
-    fn test_signed_int() {
-        let ints_str = br#"1,0,10,-15,-32765,16328,-73,-0"#;
-        let valid_ints = vec![1, 0, 10, -15, -32765, 16328, -73, 0];
-        let ints_after_parse = Input(b"");
-        let ints = signed_ints(Input(ints_str));
-        assert_eq!(ints, Ok((ints_after_parse, valid_ints)));
     }
 }
