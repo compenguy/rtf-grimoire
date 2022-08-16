@@ -157,13 +157,31 @@ mod tests {
     fn test_hexbyte_raw_invalid_first() {
         let input = Input(b"ge0f");
         let remaining_input = Input(b"ge0f");
-        assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, ErrorKind::TakeWhileMN))), hexbyte_raw(input));
+        let error_kind = ErrorKind::TakeWhileMN;
+        assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, error_kind))), hexbyte_raw(input));
     }
 
     #[test]
     fn test_hexbyte_raw_invalid_second() {
         let input = Input(b"eg0f");
         let remaining_input = Input(b"eg0f");
-        assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, ErrorKind::TakeWhileMN))), hexbyte_raw(input));
+        let error_kind = ErrorKind::TakeWhileMN;
+        assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, error_kind))), hexbyte_raw(input));
+    }
+
+    #[test]
+    fn test_hexbyte_valid() {
+        let input = Input(b"4E2B");
+        let remaining_input = Input(b"2B");
+        let parsed_output = 78u8;
+        assert_eq!(Ok((remaining_input, parsed_output)), hexbyte(input));
+    }
+
+    #[test]
+    fn test_hexbyte_invalid() {
+        let input = Input(b"4G2B");
+        let remaining_input = Input(b"4G2B");
+        let error_kind = ErrorKind::TakeWhileMN;
+        assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, error_kind))), hexbyte(input));
     }
 }
