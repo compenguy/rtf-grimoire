@@ -184,4 +184,36 @@ mod tests {
         let error_kind = ErrorKind::TakeWhileMN;
         assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, error_kind))), hexbyte(input));
     }
+
+    #[test]
+    fn test_signed_int_positive() {
+        let input = Input(b"456a");
+        let remaining_input = Input(b"a");
+        let parsed_output = 456i32;
+        assert_eq!(Ok((remaining_input, parsed_output)), signed_int(input));
+    }
+
+    #[test]
+    fn test_signed_int_negative() {
+        let input = Input(b"-920b");
+        let remaining_input = Input(b"b");
+        let parsed_output = -920i32;
+        assert_eq!(Ok((remaining_input, parsed_output)), signed_int(input));
+    }
+
+    #[test]
+    fn test_signed_int_overflow() {
+        let input = Input(b"2147483648b");
+        let remaining_input = Input(b"2147483648b");
+        let error_kind = ErrorKind::MapRes;
+        assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, error_kind))), signed_int(input));
+    }
+
+
+//     named!(signed_int<Input, i32>,
+//     map_res!(
+//         signed_int_raw,
+//         |(sign, value)| { str_to_int(value, sign) }
+//     )
+// );
 }
