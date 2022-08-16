@@ -296,4 +296,36 @@ mod tests {
         let error_kind = ErrorKind::Alpha;
         assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, error_kind))), control_word_raw(input));
     }
+
+    #[test]
+    fn test_control_word_hexbyte_raw() {
+        let input = Input(br#"\'9F4E"#);
+        let remaining_input = Input(br#"4E"#);
+        let parsed_output = ("'", Some(159i32));
+        assert_eq!(Ok((remaining_input, parsed_output)), control_word_hexbyte_raw(input));
+    }
+
+    #[test]
+    fn test_control_word_hexbyte_raw_no_slash() {
+        let input = Input(br#"'9F4E"#);
+        let remaining_input = Input(br#"'9F4E"#);
+        let error_kind = ErrorKind::Tag;
+        assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, error_kind))), control_word_hexbyte_raw(input));
+    }
+
+    #[test]
+    fn test_control_word_hexbyte_raw_no_apostrophy() {
+        let input = Input(br#"\9F4E"#);
+        let remaining_input = Input(br#"9F4E"#);
+        let error_kind = ErrorKind::Tag;
+        assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, error_kind))), control_word_hexbyte_raw(input));
+    }
+
+    #[test]
+    fn test_control_word_hexbyte_raw_invalid_hex() {
+        let input = Input(br#"\'R9F4E"#);
+        let remaining_input = Input(br#"R9F4E"#);
+        let error_kind = ErrorKind::TakeWhileMN;
+        assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, error_kind))), control_word_hexbyte_raw(input));
+    }
 }
