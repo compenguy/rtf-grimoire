@@ -232,4 +232,68 @@ mod tests {
         let error_kind = ErrorKind::NoneOf;
         assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, error_kind))), control_symbol_raw(input));
     }
+
+    #[test]
+    fn test_control_word_raw_valid_no_int() {
+        let input = Input(br#"\tag\tag67"#);
+        let remaining_input = Input(br#"\tag67"#);
+        let parsed_output = ("tag", None);
+        assert_eq!(Ok((remaining_input, parsed_output)), control_word_raw(input));
+    }
+
+    #[test]
+    fn test_control_word_raw_valid_no_int_space() {
+        let input = Input(br#"\tag \tag67"#);
+        let remaining_input = Input(br#"\tag67"#);
+        let parsed_output = ("tag", None);
+        assert_eq!(Ok((remaining_input, parsed_output)), control_word_raw(input));
+    }
+
+    #[test]
+    fn test_control_word_raw_valid_positive_int() {
+        let input = Input(br#"\tag45\tag67"#);
+        let remaining_input = Input(br#"\tag67"#);
+        let parsed_output = ("tag", Some(45i32));
+        assert_eq!(Ok((remaining_input, parsed_output)), control_word_raw(input));
+    }
+
+    #[test]
+    fn test_control_word_raw_valid_positive_int_space() {
+        let input = Input(br#"\tag45 \tag67"#);
+        let remaining_input = Input(br#"\tag67"#);
+        let parsed_output = ("tag", Some(45i32));
+        assert_eq!(Ok((remaining_input, parsed_output)), control_word_raw(input));
+    }
+
+    #[test]
+    fn test_control_word_raw_valid_negative_int() {
+        let input = Input(br#"\tag-45\tag67"#);
+        let remaining_input = Input(br#"\tag67"#);
+        let parsed_output = ("tag", Some(-45i32));
+        assert_eq!(Ok((remaining_input, parsed_output)), control_word_raw(input));
+    }
+
+    #[test]
+    fn test_control_word_raw_valid_negative_int_space() {
+        let input = Input(br#"\tag-45 \tag67"#);
+        let remaining_input = Input(br#"\tag67"#);
+        let parsed_output = ("tag", Some(-45i32));
+        assert_eq!(Ok((remaining_input, parsed_output)), control_word_raw(input));
+    }
+
+    #[test]
+    fn test_control_word_raw_no_slash() {
+        let input = Input(br#"dfg-45 \tag67"#);
+        let remaining_input = Input(br#"dfg-45 \tag67"#);
+        let error_kind = ErrorKind::Tag;
+        assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, error_kind))), control_word_raw(input));
+    }
+
+    #[test]
+    fn test_control_word_raw_invalid_word() {
+        let input = Input(br#"\*#~-45 \tag67"#);
+        let remaining_input = Input(br#"*#~-45 \tag67"#);
+        let error_kind = ErrorKind::Alpha;
+        assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, error_kind))), control_word_raw(input));
+    }
 }
