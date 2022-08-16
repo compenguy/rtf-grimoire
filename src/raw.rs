@@ -209,11 +209,27 @@ mod tests {
         assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, error_kind))), signed_int(input));
     }
 
+    #[test]
+    fn test_control_symbol_raw_valid() {
+        let input = Input(br#"\^t"#);
+        let remaining_input = Input(b"t");
+        let parsed_output = '^';
+        assert_eq!(Ok((remaining_input, parsed_output)), control_symbol_raw(input));
+    }
 
-//     named!(signed_int<Input, i32>,
-//     map_res!(
-//         signed_int_raw,
-//         |(sign, value)| { str_to_int(value, sign) }
-//     )
-// );
+    #[test]
+    fn test_control_symbol_raw_invalid_tag() {
+        let input = Input(br#"hx"#);
+        let remaining_input = Input(br#"hx"#);
+        let error_kind = ErrorKind::Tag;
+        assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, error_kind))), control_symbol_raw(input));
+    }
+
+    #[test]
+    fn test_control_symbol_raw_invalid_noneof() {
+        let input = Input(br#"\hx"#);
+        let remaining_input = Input(br#"hx"#);
+        let error_kind = ErrorKind::NoneOf;
+        assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, error_kind))), control_symbol_raw(input));
+    }
 }
