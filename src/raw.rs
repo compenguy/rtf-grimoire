@@ -138,39 +138,27 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_hexbyte_raw_upper() {
-        let input = Input(b"0F4E");
-        let parsed_output = "0F";
-        let remaining_input = Input(b"4E");
-        assert_eq!(Ok((remaining_input, parsed_output)), hexbyte_raw(input));
+    fn test_hexbyte_raw() {
+        for (input, remaining_input, parsed_output) in [
+            (Input(b"0F4E"), Input(b"4E"), "0F"), // Uppercase
+            (Input(b"4e0f"), Input(b"0f"), "4e"), // Lowercase
+        ] {
+            assert_eq!(Ok((remaining_input, parsed_output)), hexbyte_raw(input));
+        }
     }
 
     #[test]
-    fn test_hexbyte_raw_lower() {
-        let input = Input(b"4e0f");
-        let parsed_output = "4e";
-        let remaining_input = Input(b"0f");
-        assert_eq!(Ok((remaining_input, parsed_output)), hexbyte_raw(input));
+    fn test_hexbyte_raw_invalid() {
+        for (input, remaining_input, error_kind) in [
+            (Input(b"ge0f"), Input(b"ge0f"), ErrorKind::TakeWhileMN), // First byte invalid
+            (Input(b"eg0f"), Input(b"eg0f"), ErrorKind::TakeWhileMN) // Second byte invalid
+            ]{
+            assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, error_kind))), hexbyte_raw(input));
+        }
     }
 
     #[test]
-    fn test_hexbyte_raw_invalid_first() {
-        let input = Input(b"ge0f");
-        let remaining_input = Input(b"ge0f");
-        let error_kind = ErrorKind::TakeWhileMN;
-        assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, error_kind))), hexbyte_raw(input));
-    }
-
-    #[test]
-    fn test_hexbyte_raw_invalid_second() {
-        let input = Input(b"eg0f");
-        let remaining_input = Input(b"eg0f");
-        let error_kind = ErrorKind::TakeWhileMN;
-        assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, error_kind))), hexbyte_raw(input));
-    }
-
-    #[test]
-    fn test_hexbyte_valid() {
+    fn test_hexbyte() {
         let input = Input(b"4E2B");
         let remaining_input = Input(b"2B");
         let parsed_output = 78u8;
@@ -187,26 +175,22 @@ mod tests {
 
     #[test]
     fn test_signed_int_positive() {
-        let input = Input(b"456a");
-        let remaining_input = Input(b"a");
-        let parsed_output = 456i32;
-        assert_eq!(Ok((remaining_input, parsed_output)), signed_int(input));
+        for (input, remaining_input, parsed_output) in [
+            (Input(b"456a"), Input(b"a"), 456i32), // Positive
+            (Input(b"-920b"), Input(b"b"), -920i32) // Negative
+        ]{
+            assert_eq!(Ok((remaining_input, parsed_output)), signed_int(input));
+        }
     }
 
     #[test]
-    fn test_signed_int_negative() {
-        let input = Input(b"-920b");
-        let remaining_input = Input(b"b");
-        let parsed_output = -920i32;
-        assert_eq!(Ok((remaining_input, parsed_output)), signed_int(input));
-    }
-
-    #[test]
-    fn test_signed_int_overflow() {
-        let input = Input(b"2147483648b");
-        let remaining_input = Input(b"2147483648b");
-        let error_kind = ErrorKind::MapRes;
-        assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, error_kind))), signed_int(input));
+    fn test_signed_int_invalid() {
+        for (input, remaining_input, error_kind) in [
+            (Input(b"2147483648b"), Input(b"2147483648b"), ErrorKind::MapRes), // Overflow
+            (Input(b"a456"), Input(b"a456"), ErrorKind::Digit) // First char invalid
+        ] {
+            assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, error_kind))), signed_int(input));
+        }
     }
 
     #[test]
@@ -218,139 +202,67 @@ mod tests {
     }
 
     #[test]
-    fn test_control_symbol_raw_invalid_tag() {
-        let input = Input(br#"hx"#);
-        let remaining_input = Input(br#"hx"#);
-        let error_kind = ErrorKind::Tag;
-        assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, error_kind))), control_symbol_raw(input));
+    fn test_control_symbol_raw_invalid() {
+        for (input, remaining_input, error_kind) in [
+            (Input(b"hx"), Input(b"hx"), ErrorKind::Tag), // No starting slash
+            (Input(br#"\hx"#), Input(b"hx"), ErrorKind::NoneOf) // Excluded char
+            ]{
+            assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, error_kind))), control_symbol_raw(input));
+        }
     }
 
     #[test]
-    fn test_control_symbol_raw_invalid_noneof() {
-        let input = Input(br#"\hx"#);
-        let remaining_input = Input(br#"hx"#);
-        let error_kind = ErrorKind::NoneOf;
-        assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, error_kind))), control_symbol_raw(input));
+    fn test_control_word_raw_valid() {
+        for (input, remaining_input, parsed_output) in [
+            (Input(br#"\tag\tag67"#), Input(br#"\tag67"#), ("tag", None)), // No int, no space
+            (Input(br#"\tag \tag67"#), Input(br#"\tag67"#), ("tag", None)), // No int, optional space
+            (Input(br#"\tag45\tag67"#), Input(br#"\tag67"#), ("tag", Some(45i32))), // Positive int, no space
+            (Input(br#"\tag45 \tag67"#), Input(br#"\tag67"#), ("tag", Some(45i32))), // Positive int, optional space
+            (Input(br#"\tag-45\tag67"#), Input(br#"\tag67"#), ("tag", Some(-45i32))), // Negative int, no space
+            (Input(br#"\tag-45 \tag67"#), Input(br#"\tag67"#), ("tag", Some(-45i32))) // Negative int, optional space
+            ] {
+            assert_eq!(Ok((remaining_input, parsed_output)), control_word_raw(input));
+        }
     }
 
     #[test]
-    fn test_control_word_raw_valid_no_int() {
-        let input = Input(br#"\tag\tag67"#);
-        let remaining_input = Input(br#"\tag67"#);
-        let parsed_output = ("tag", None);
-        assert_eq!(Ok((remaining_input, parsed_output)), control_word_raw(input));
-    }
-
-    #[test]
-    fn test_control_word_raw_valid_no_int_space() {
-        let input = Input(br#"\tag \tag67"#);
-        let remaining_input = Input(br#"\tag67"#);
-        let parsed_output = ("tag", None);
-        assert_eq!(Ok((remaining_input, parsed_output)), control_word_raw(input));
-    }
-
-    #[test]
-    fn test_control_word_raw_valid_positive_int() {
-        let input = Input(br#"\tag45\tag67"#);
-        let remaining_input = Input(br#"\tag67"#);
-        let parsed_output = ("tag", Some(45i32));
-        assert_eq!(Ok((remaining_input, parsed_output)), control_word_raw(input));
-    }
-
-    #[test]
-    fn test_control_word_raw_valid_positive_int_space() {
-        let input = Input(br#"\tag45 \tag67"#);
-        let remaining_input = Input(br#"\tag67"#);
-        let parsed_output = ("tag", Some(45i32));
-        assert_eq!(Ok((remaining_input, parsed_output)), control_word_raw(input));
-    }
-
-    #[test]
-    fn test_control_word_raw_valid_negative_int() {
-        let input = Input(br#"\tag-45\tag67"#);
-        let remaining_input = Input(br#"\tag67"#);
-        let parsed_output = ("tag", Some(-45i32));
-        assert_eq!(Ok((remaining_input, parsed_output)), control_word_raw(input));
-    }
-
-    #[test]
-    fn test_control_word_raw_valid_negative_int_space() {
-        let input = Input(br#"\tag-45 \tag67"#);
-        let remaining_input = Input(br#"\tag67"#);
-        let parsed_output = ("tag", Some(-45i32));
-        assert_eq!(Ok((remaining_input, parsed_output)), control_word_raw(input));
-    }
-
-    #[test]
-    fn test_control_word_raw_no_slash() {
-        let input = Input(br#"dfg-45 \tag67"#);
-        let remaining_input = Input(br#"dfg-45 \tag67"#);
-        let error_kind = ErrorKind::Tag;
-        assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, error_kind))), control_word_raw(input));
-    }
-
-    #[test]
-    fn test_control_word_raw_invalid_word() {
-        let input = Input(br#"\*#~-45 \tag67"#);
-        let remaining_input = Input(br#"*#~-45 \tag67"#);
-        let error_kind = ErrorKind::Alpha;
-        assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, error_kind))), control_word_raw(input));
+    fn test_control_word_raw_invalid() {
+        for (input, remaining_input, error_kind) in [
+            (Input(br#"dfg-45 \tag67"#), Input(br#"dfg-45 \tag67"#), ErrorKind::Tag), // No slash
+            (Input(br#"\*#~-45 \tag67"#), Input(br#"*#~-45 \tag67"#), ErrorKind::Alpha), // Invalid chars in control word
+        ] {
+            assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, error_kind))), control_word_raw(input));
+        }
     }
 
     #[test]
     fn test_control_word_hexbyte_raw() {
         let input = Input(br#"\'9F4E"#);
-        let remaining_input = Input(br#"4E"#);
+        let remaining_input = Input(b"4E");
         let parsed_output = ("'", Some(159i32));
         assert_eq!(Ok((remaining_input, parsed_output)), control_word_hexbyte_raw(input));
     }
 
     #[test]
-    fn test_control_word_hexbyte_raw_no_slash() {
-        let input = Input(br#"'9F4E"#);
-        let remaining_input = Input(br#"'9F4E"#);
-        let error_kind = ErrorKind::Tag;
-        assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, error_kind))), control_word_hexbyte_raw(input));
-    }
-
-    #[test]
-    fn test_control_word_hexbyte_raw_no_apostrophy() {
-        let input = Input(br#"\9F4E"#);
-        let remaining_input = Input(br#"9F4E"#);
-        let error_kind = ErrorKind::Tag;
-        assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, error_kind))), control_word_hexbyte_raw(input));
-    }
-
-    #[test]
-    fn test_control_word_hexbyte_raw_invalid_hex() {
-        let input = Input(br#"\'R9F4E"#);
-        let remaining_input = Input(br#"R9F4E"#);
-        let error_kind = ErrorKind::TakeWhileMN;
-        assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, error_kind))), control_word_hexbyte_raw(input));
+    fn test_control_word_hexbyte_raw_invalid() {
+        for (input, remaining_input, error_kind) in [
+            (Input(b"'9F4E"), Input(b"'9F4E"), ErrorKind::Tag), // No slash
+            (Input(br#"\9F4E"#), Input(b"9F4E"), ErrorKind::Tag), // No apostrophe
+            (Input(br#"\'R9F4E"#), Input(b"R9F4E"), ErrorKind::TakeWhileMN), // Invalid hex
+        ] {
+            assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, error_kind))), control_word_hexbyte_raw(input));
+        }
     }
 
     #[test]
     fn test_control_bin_raw() {
-        let input = Input(br#"\bin2ABCD"#);
-        let remaining_input = Input(br#"CD"#);
-        let parsed_output = &b"AB"[..];
-        assert_eq!(Ok((remaining_input, parsed_output)), control_bin_raw(input));
-    }
-
-    #[test]
-    fn test_control_bin_raw_space() {
-        let input = Input(br#"\bin2 ABCD"#);
-        let remaining_input = Input(br#"CD"#);
-        let parsed_output = &b"AB"[..];
-        assert_eq!(Ok((remaining_input, parsed_output)), control_bin_raw(input));
-    }
-
-    #[test]
-    fn test_control_bin_raw_no_len() {
-        let input = Input(br#"\binABCD"#);
-        let remaining_input = Input(br#"ABCD"#);
-        let parsed_output = &b""[..];
-        assert_eq!(Ok((remaining_input, parsed_output)), control_bin_raw(input));
+        for (input, remaining_input, parsed_output) in [
+            (Input(br#"\bin2 ABCD"#), Input(b"CD"), &b"AB"[..]), // Optional length & space
+            (Input(br#"\bin2ABCD"#), Input(b"CD"), &b"AB"[..]), // Optional length, no space
+            (Input(br#"\binABCD"#), Input(b"ABCD"), &b""[..]), // No length, no space
+        ] {
+            assert_eq!(Ok((remaining_input, parsed_output)), control_bin_raw(input));
+        }
     }
 
     #[test]
