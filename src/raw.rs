@@ -132,10 +132,96 @@ named!(pub newline_raw<Input, &[u8]>,
     )
 );
 
+
 #[cfg(test)]
 mod tests {
     use nom::ErrorKind;
     use super::*;
+
+    #[test]
+    fn test_input_to_str() {
+        let input = Input(b"123abc");
+        let parsed_output = "123abc";
+        assert_eq!(Ok(parsed_output), input_to_str(input));
+    }
+
+    #[test]
+    fn test_input_to_str_invalid_utf8() {
+        let input = Input(&[0x8F][..]);
+        let err_debug_str = "Err(Utf8Error { valid_up_to: 0, error_len: Some(1) })";
+        assert_eq!(err_debug_str, format!("{:?}", input_to_str(input)));
+    }
+
+    #[test]
+    fn test_str_to_int() {
+        for (input_str, input_sign, parsed_output) in [
+            ("1234", Some("+"), 1234i32), // Positive
+            ("1234", Some("-"), -1234i32), // Negative
+            ("1234", None, 1234i32), // No sign
+        ] {
+            assert_eq!(Ok(parsed_output), str_to_int(input_str, input_sign));
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "Unsupported integer sign char: p")]
+    fn test_str_to_int_invalid_sign() {
+        for (input_str, input_sign, parsed_output) in [
+            ("1234", Some("p"), 1234i32), // Invalid sign
+        ] {
+            assert_eq!(Ok(parsed_output), str_to_int(input_str, input_sign));
+        }
+    }
+
+    #[test]
+    fn test_str_to_int_invalid_str() {
+        for (input_str, input_sign, err_debug_str) in [
+            ("BF", Some("+"), "Err(ParseIntError { kind: InvalidDigit })"), // Invalid sign
+
+        ] {
+            assert_eq!(format!("{:?}", str_to_int(input_str, input_sign)), err_debug_str);
+        }
+    }
+
+    #[test]
+    // We dont really need to test the conversion from hex to int, but let check the results /
+    // errors returned.
+    fn test_hex_str_to_int() {
+        let input = "0F";
+        let parsed_output = 15u8;
+        assert_eq!(Ok(parsed_output), hex_str_to_int(input));
+    }
+
+    #[test]
+    fn test_hex_str_to_int_invalid() {
+        for (input, err_debug_str) in [
+            ("uj", "Err(ParseIntError { kind: InvalidDigit })"), // Invalid input
+            ("9D4B", "Err(ParseIntError { kind: PosOverflow })"), // Overflow
+            ("", "Err(ParseIntError { kind: Empty })"), // Empty input
+    ] {
+            assert_eq!(format!("{:?}", hex_str_to_int(input)), err_debug_str );
+        }
+    }
+
+    #[test]
+    fn test_signed_int_raw() {
+        for (input, remaining_input, parsed_output) in [
+            (Input(b"123ab"), Input(b"ab"), (None, "123")), // Positive
+            (Input(b"-123ab"), Input(b"ab"), (Some("-"), "123")), // Negative
+        ] {
+            assert_eq!(Ok((remaining_input, parsed_output)), signed_int_raw(input));
+        }
+    }
+
+    #[test]
+    fn test_signed_int_raw_invalid() {
+        for (input, remaining_input, error_kind) in [
+            (Input(b"ab123"), Input(b"ab123"), ErrorKind::Digit), // Positive
+            (Input(b"ab-123"), Input(b"ab-123"), ErrorKind::Digit) // Negative
+        ] {
+            assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, error_kind))), signed_int_raw(input));
+        }
+    }
 
     #[test]
     fn test_hexbyte_raw() {
@@ -272,4 +358,72 @@ mod tests {
         let error_kind = ErrorKind::Tag;
         assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, error_kind))), control_bin_raw(input));
     }
+
+    #[test]
+    fn test_rtf_text_raw() {
+        for (input, remaining_input, parsed_output) in [
+            (Input(br#"123\abc"#), Input(br#"\abc"#), &b"123"[..]), // Parse upto slash
+            (Input(b"123}abc"), Input(b"}abc"), &b"123"[..]), // Parse upto closing curly brace
+            (Input(b"123{abc"), Input(b"{abc"), &b"123"[..]), // Parse upto opening curly brace
+            (Input(b"123\rabc"), Input(b"\rabc"), &b"123"[..]), // CR
+            (Input(b"123\nabc"), Input(b"\nabc"), &b"123"[..]), // LF
+        ] {
+            assert_eq!(Ok((remaining_input, parsed_output)), rtf_text_raw(input));
+        }
+    }
+
+    #[test]
+    fn test_start_group_raw() {
+        let input = Input(b"{abc");
+        let remaining_input = Input(b"abc");
+        let parsed_output = '{';
+        assert_eq!(Ok((remaining_input, parsed_output)), start_group_raw(input));
+    }
+
+    #[test]
+    fn test_start_group_raw_invalid() {
+        let input = Input(b"a{bc");
+        let remaining_input = Input(b"a{bc");
+        let error_kind= ErrorKind::Char;
+        assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, error_kind))), start_group_raw(input));
+    }
+
+    #[test]
+    fn test_end_group_raw() {
+        let input = Input(b"}abc");
+        let remaining_input = Input(b"abc");
+        let parsed_output = '}';
+        assert_eq!(Ok((remaining_input, parsed_output)), end_group_raw(input));
+    }
+
+    #[test]
+    fn test_end_group_raw_invalid() {
+        let input = Input(b"a}bc");
+        let remaining_input = Input(b"a}bc");
+        let error_kind= ErrorKind::Char;
+        assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, error_kind))), end_group_raw(input));
+    }
+
+    #[test]
+    fn test_newline_raw() {
+        for (input, remaining_input, parsed_output) in [
+            (Input(b"\r\nabc"), Input(br#"abc"#), &b"\r\n"[..]), // CLRF
+            (Input(b"\nabc"), Input(b"abc"), &b"\n"[..]), // \n
+            (Input(b"\rabc"), Input(b"abc"), &b"\r"[..]), // \r
+        ] {
+            assert_eq!(Ok((remaining_input, parsed_output)), newline_raw(input));
+        }
+    }
+
+    #[test]
+    fn test_newline_raw_invalid() {
+        for (input, remaining_input, error_kind) in [
+            (Input(b"a\r\nbc"), Input(b"a\r\nbc"), ErrorKind::Alt), //CLRF
+            (Input(b"a\nbc"), Input(b"a\nbc"), ErrorKind::Alt), // \n
+            (Input(b"a\rbc"), Input(b"a\rbc"), ErrorKind::Alt), // \r
+            ] {
+            assert_eq!(Err(nom::Err::Error(nom::Context::Code(remaining_input, error_kind))), newline_raw(input));
+        }
+    }
+
 }
