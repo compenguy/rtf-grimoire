@@ -9,7 +9,8 @@ readme = "README.md"
 license = "MIT"
 categories = ["parser-implementations"]
 keywords = ["rtf"]
+edition = "2021"
 
 [dependencies]
-nom = "4.2"
+nom = "7.1.1"
 
