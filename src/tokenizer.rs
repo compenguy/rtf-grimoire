@@ -6,13 +6,16 @@
 //     Copyright (c) 2008 Microsoft Corporation.  All Rights reserved.
 //
 
+use crate::raw::{
+    control_bin_raw, control_symbol_raw, control_word_hexbyte_raw, control_word_raw, end_group_raw,
+    newline_raw, rtf_text_raw, start_group_raw,
+};
 use std;
-use crate::raw::{control_bin_raw, control_symbol_raw, control_word_hexbyte_raw, control_word_raw, end_group_raw, newline_raw, rtf_text_raw, start_group_raw};
 
-use nom::IResult;
 use nom::branch::alt;
 use nom::combinator::map;
 use nom::multi::many0;
+use nom::IResult;
 
 // #[derive(Debug)]
 // pub struct ParseError<I> {
@@ -181,63 +184,54 @@ impl Token {
 //
 // See section "Conventions of an RTF Reader" in the RTF specification.
 pub fn read_token(input: &[u8]) -> IResult<&[u8], Token> {
-    alt((read_control_hexbyte, read_control_symbol, read_control_bin, read_control_word, read_start_group, read_end_group, read_newline, read_rtf_text))(input)
+    alt((
+        read_control_hexbyte,
+        read_control_symbol,
+        read_control_bin,
+        read_control_word,
+        read_start_group,
+        read_end_group,
+        read_newline,
+        read_rtf_text,
+    ))(input)
 }
 
 pub fn read_control_hexbyte(input: &[u8]) -> IResult<&[u8], Token> {
-    map(
-        control_word_hexbyte_raw,
-        |(name, arg)| Token::ControlWord { name: String::from(name), arg }
-    )(input)
+    map(control_word_hexbyte_raw, |(name, arg)| Token::ControlWord {
+        name: String::from(name),
+        arg,
+    })(input)
 }
 
 pub fn read_control_symbol(input: &[u8]) -> IResult<&[u8], Token> {
-    map(
-        control_symbol_raw,
-        Token::ControlSymbol
-    )(input)
+    map(control_symbol_raw, Token::ControlSymbol)(input)
 }
 
 pub fn read_control_word(input: &[u8]) -> IResult<&[u8], Token> {
-    map(
-        control_word_raw,
-        |(name, arg)| Token::ControlWord { name: String::from(name), arg }
-    )(input)
+    map(control_word_raw, |(name, arg)| Token::ControlWord {
+        name: String::from(name),
+        arg,
+    })(input)
 }
 
 pub fn read_control_bin(input: &[u8]) -> IResult<&[u8], Token> {
-    map(
-        control_bin_raw,
-        |bytes| Token::ControlBin(bytes.to_vec())
-    )(input)
+    map(control_bin_raw, |bytes| Token::ControlBin(bytes.to_vec()))(input)
 }
 
 pub fn read_newline(input: &[u8]) -> IResult<&[u8], Token> {
-    map(
-        newline_raw,
-        |_| Token::Newline
-    )(input)
+    map(newline_raw, |_| Token::Newline)(input)
 }
 
 pub fn read_start_group(input: &[u8]) -> IResult<&[u8], Token> {
-    map(
-        start_group_raw,
-        |_| Token::StartGroup
-    )(input)
+    map(start_group_raw, |_| Token::StartGroup)(input)
 }
 
 pub fn read_end_group(input: &[u8]) -> IResult<&[u8], Token> {
-    map(
-        end_group_raw,
-        |_| Token::EndGroup
-    )(input)
+    map(end_group_raw, |_| Token::EndGroup)(input)
 }
 
 pub fn read_rtf_text(input: &[u8]) -> IResult<&[u8], Token> {
-    map(
-        rtf_text_raw,
-        |text_bytes| Token::Text(text_bytes.to_vec())
-    )(input)
+    map(rtf_text_raw, |text_bytes| Token::Text(text_bytes.to_vec()))(input)
 }
 
 pub fn read_token_stream(input: &[u8]) -> IResult<&[u8], Vec<Token>> {
