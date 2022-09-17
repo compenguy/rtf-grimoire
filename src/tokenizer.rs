@@ -17,26 +17,32 @@ use nom::combinator::map;
 use nom::multi::many0;
 use nom::IResult;
 
-// #[derive(Debug)]
-// pub struct ParseError<I> {
-//     inner: nom::Err<I>,
-// }
-//
-// impl<I> std::convert::From<nom::Err<I>> for ParseError {
-//     fn from(error: nom::Err<I>) -> Self {
-//         Self {
-//             inner: error,
-//         }
-//     }
-// }
-//
-// impl std::fmt::Display for ParseError {
-//     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-//         write!(f, "Parser Error: {}", self.inner.description())
-//     }
-// }
-//
-// type Result<T> = std::result::Result<T, ParseError>;
+#[derive(Debug)]
+pub struct ParseError<I> {
+    inner: nom::error::Error<I>,
+}
+
+impl<I> std::convert::From<nom::error::Error<I>> for ParseError<I>
+where
+    I: std::fmt::Debug + std::fmt::Display,
+{
+    fn from(error: nom::error::Error<I>) -> Self {
+        Self { inner: error }
+    }
+}
+
+impl<I> std::fmt::Display for ParseError<I>
+where
+    I: std::fmt::Debug + std::fmt::Display,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "Parser Error: {}", self.inner.to_string())
+    }
+}
+
+impl<I> std::error::Error for ParseError<I> where I: std::fmt::Debug + std::fmt::Display {}
+
+pub type Result<T, I> = std::result::Result<T, ParseError<I>>;
 
 #[derive(PartialEq, Eq)]
 pub enum Token {
@@ -381,7 +387,7 @@ mod tests {
     fn test_sample_doc() {
         let test_bytes = include_bytes!("../tests/sample.rtf");
         if let Err(e) = parse(test_bytes) {
-            panic!("Parsing error: "); //{:?}", e);
+            panic!("Parsing error: {:?}", e);
         }
         match read_token_stream(test_bytes) {
             Ok((unparsed, _)) => assert_eq!(
@@ -391,7 +397,7 @@ mod tests {
                 unparsed.len(),
                 &unparsed[0..std::cmp::min(5, unparsed.len())]
             ),
-            Err(e) => panic!("Parsing error: "), //{:?}", e),
+            Err(e) => panic!("Parsing error: {:?}", e),
         }
     }
 
@@ -400,7 +406,7 @@ mod tests {
     fn test_spec_doc() {
         let test_bytes = include_bytes!("../tests/RTF-Spec-1.7.rtf");
         if let Err(e) = parse(test_bytes) {
-            panic!("Parsing error: "); //{:?}", e);
+            panic!("Parsing error: {:?}", e);
         }
         match read_token_stream(test_bytes) {
             Ok((unparsed, _)) => assert_eq!(
@@ -410,7 +416,7 @@ mod tests {
                 unparsed.len(),
                 &unparsed[0..std::cmp::min(5, unparsed.len())]
             ),
-            Err(e) => panic!("Parsing error: "), //{}", e),
+            Err(e) => panic!("Parsing error: {}", e),
         }
     }
 }
