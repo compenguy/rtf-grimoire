@@ -7,7 +7,6 @@
 //
 
 use std;
-use std::result::Result::Err;
 
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take, take_while_m_n};
