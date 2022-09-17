@@ -6,8 +6,8 @@
 //     Copyright (c) 2008 Microsoft Corporation.  All Rights reserved.
 //
 
-use std;
 use nom;
+use std;
 
 use nom::crlf;
 use nom::digit;
@@ -22,7 +22,7 @@ fn input_to_str(s: Input) -> Result<&str, std::str::Utf8Error> {
 
 // Helper function for converting &str into a signed int
 #[allow(dead_code)]
-fn str_to_int<'a>(s: &'a str, sign: Option<&str>) -> Result<i32, std::num::ParseIntError> {
+fn str_to_int(s: &str, sign: Option<&str>) -> Result<i32, std::num::ParseIntError> {
     s.parse::<i32>().map(|x| {
         x * sign.map_or(1, |x| match x {
             "-" => -1,
