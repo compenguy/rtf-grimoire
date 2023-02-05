@@ -25,7 +25,7 @@ fn str_to_int(s: &str, sign: Option<&str>) -> Result<i32, std::num::ParseIntErro
         x * sign.map_or(1, |x| match x {
             "-" => -1,
             "+" => 1,
-            _ => panic!("Unsupported integer sign char: {}", x),
+            _ => panic!("Unsupported integer sign char: {x}"),
         })
     })
 }

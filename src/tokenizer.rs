@@ -58,24 +58,24 @@ pub enum Token {
 impl std::fmt::Debug for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Token::ControlSymbol(c) => write!(f, "Token::ControlSymbol({})", c),
+            Token::ControlSymbol(c) => write!(f, "Token::ControlSymbol({c})"),
             Token::ControlWord { name, arg } => write!(
                 f,
                 "Token::ControlWord({}{})",
                 name,
-                arg.map(|i| format!(":{}", i)).unwrap_or_default()
+                arg.map(|i| format!(":{i}")).unwrap_or_default()
             ),
             Token::ControlBin(data) => {
                 write!(f, "Token::ControlBin(")?;
                 for byte in data {
-                    write!(f, " {:02x?}", byte)?;
+                    write!(f, " {byte:02x?}")?;
                 }
                 write!(f, ")")
             }
             Token::Text(data) => {
                 write!(f, "Token::Text(")?;
                 for byte in data {
-                    write!(f, " {:02x?}", byte)?;
+                    write!(f, " {byte:02x?}")?;
                 }
                 write!(f, ")")
             }
@@ -89,10 +89,10 @@ impl std::fmt::Debug for Token {
 impl Token {
     pub fn to_rtf(&self) -> Vec<u8> {
         match self {
-            Token::ControlSymbol(c) => format!("\\{}", c).as_bytes().to_vec(),
+            Token::ControlSymbol(c) => format!("\\{c}").as_bytes().to_vec(),
             Token::ControlWord { name, arg } => match arg {
-                Some(num) => format!("\\{}{}", name, num).as_bytes().to_vec(),
-                None => format!("\\{}", name).as_bytes().to_vec(),
+                Some(num) => format!("\\{name}{num}").as_bytes().to_vec(),
+                None => format!("\\{name}").as_bytes().to_vec(),
             },
             Token::ControlBin(data) => {
                 let mut rtf: Vec<u8> = Vec::with_capacity(12 + data.len());
