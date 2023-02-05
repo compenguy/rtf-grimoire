@@ -10,6 +10,7 @@ license = "MIT"
 categories = ["parser-implementations"]
 keywords = ["rtf"]
 edition = "2021"
+rust-version = "1.58" # Captured identifiers in format strings
 
 [dependencies]
 nom = "7.1.3"
