@@ -178,7 +178,9 @@ mod tests {
 
     #[test]
     fn test_signed_int_raw() {
-        let test_data: [(&[u8], &[u8], (Option<&str>, &str)); 2] = [
+        type TestData<'a> = (&'a [u8], &'a [u8], (Option<&'a str>, &'a str));
+
+        let test_data: [TestData; 2] = [
             (b"123ab", b"ab", (None, "123")),       // Positive
             (b"-123ab", b"ab", (Some("-"), "123")), // Negative
         ];
@@ -312,7 +314,9 @@ mod tests {
 
     #[test]
     fn test_control_word_raw_valid() {
-        let test_data: [(&[u8], &[u8], (&str, Option<i32>)); 6] = [
+        type TestData<'a> = (&'a [u8], &'a [u8], (&'a str, Option<i32>));
+
+        let test_data: [TestData; 6] = [
             (br#"\tag\tag67"#, br#"\tag67"#, ("tag", None)), // No int, no space
             (br#"\tag \tag67"#, br#"\tag67"#, ("tag", None)), // No int, optional space
             (br#"\tag45\tag67"#, br#"\tag67"#, ("tag", Some(45))), // Positive int, no space
