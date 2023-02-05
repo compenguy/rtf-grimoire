@@ -380,37 +380,29 @@ mod tests {
     #[test]
     fn test_sample_doc() {
         let test_bytes = include_bytes!("../tests/sample.rtf");
-        if let Err(e) = parse(test_bytes) {
-            panic!("Parsing error: "); //{:?}", e);
-        }
-        match read_token_stream(test_bytes) {
-            Ok((unparsed, _)) => assert_eq!(
-                unparsed.len(),
-                0,
-                "Unparsed data: {} bytes (first <=5 bytes: {:02X?})",
-                unparsed.len(),
-                &unparsed[0..std::cmp::min(5, unparsed.len())]
-            ),
-            Err(e) => panic!("Parsing error: "), //{:?}", e),
-        }
+        parse(test_bytes).unwrap();
+        let (unparsed, _) = read_token_stream(test_bytes).unwrap();
+        assert_eq!(
+            unparsed.len(),
+            0,
+            "Unparsed data: {} bytes (first <=5 bytes: {:02X?})",
+            unparsed.len(),
+            &unparsed[0..std::cmp::min(5, unparsed.len())]
+        );
     }
 
     // The spec doc is interested because it has unmatched "{}" groups
     #[test]
     fn test_spec_doc() {
         let test_bytes = include_bytes!("../tests/RTF-Spec-1.7.rtf");
-        if let Err(e) = parse(test_bytes) {
-            panic!("Parsing error: "); //{:?}", e);
-        }
-        match read_token_stream(test_bytes) {
-            Ok((unparsed, _)) => assert_eq!(
-                unparsed.len(),
-                0,
-                "Unparsed data: {} bytes (first <=5 bytes: {:02X?})",
-                unparsed.len(),
-                &unparsed[0..std::cmp::min(5, unparsed.len())]
-            ),
-            Err(e) => panic!("Parsing error: "), //{}", e),
-        }
+        parse(test_bytes).unwrap();
+        let (unparsed, _) = read_token_stream(test_bytes).unwrap();
+        assert_eq!(
+            unparsed.len(),
+            0,
+            "Unparsed data: {} bytes (first <=5 bytes: {:02X?})",
+            unparsed.len(),
+            &unparsed[0..std::cmp::min(5, unparsed.len())]
+        );
     }
 }

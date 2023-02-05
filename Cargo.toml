@@ -12,5 +12,5 @@ keywords = ["rtf"]
 edition = "2021"
 
 [dependencies]
-nom = "7.1.1"
+nom = "7.1.3"
 
