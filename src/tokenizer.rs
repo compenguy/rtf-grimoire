@@ -38,6 +38,15 @@ where
     }
 }
 
+impl<I> std::error::Error for ParseError<I>
+where
+    I: std::fmt::Debug + std::fmt::Display + 'static,
+{
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.inner)
+    }
+}
+
 #[derive(PartialEq, Eq)]
 pub enum Token {
     ControlSymbol(char),
