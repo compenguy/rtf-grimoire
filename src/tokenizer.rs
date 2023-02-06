@@ -15,28 +15,28 @@ use std;
 use nom::branch::alt;
 use nom::combinator::map;
 use nom::multi::many0;
+use nom::Finish;
 use nom::IResult;
 
-// #[derive(Debug)]
-// pub struct ParseError<I> {
-//     inner: nom::Err<I>,
-// }
-//
-// impl<I> std::convert::From<nom::Err<I>> for ParseError {
-//     fn from(error: nom::Err<I>) -> Self {
-//         Self {
-//             inner: error,
-//         }
-//     }
-// }
-//
-// impl std::fmt::Display for ParseError {
-//     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-//         write!(f, "Parser Error: {}", self.inner.description())
-//     }
-// }
-//
-// type Result<T> = std::result::Result<T, ParseError>;
+#[derive(Debug)]
+pub struct ParseError<I> {
+    inner: nom::error::Error<I>,
+}
+
+impl<I> std::convert::From<nom::error::Error<I>> for ParseError<I> {
+    fn from(error: nom::error::Error<I>) -> Self {
+        Self { inner: error }
+    }
+}
+
+impl<I> std::fmt::Display for ParseError<I>
+where
+    I: std::fmt::Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "Parser Error: {:?}", self.inner)
+    }
+}
 
 #[derive(PartialEq, Eq)]
 pub enum Token {
@@ -240,6 +240,13 @@ pub fn read_token_stream(input: &[u8]) -> IResult<&[u8], Vec<Token>> {
 
 pub fn parse(bytes: &[u8]) -> IResult<&[u8], Vec<Token>> {
     read_token_stream(bytes)
+}
+
+pub fn parse_finished(bytes: &[u8]) -> Result<Vec<Token>, ParseError<&[u8]>> {
+    parse(bytes)
+        .finish()
+        .map(|(_, o)| o)
+        .map_err(ParseError::from)
 }
 
 #[cfg(test)]
