@@ -6,35 +6,37 @@
 //     Copyright (c) 2008 Microsoft Corporation.  All Rights reserved.
 //
 
-use raw::{control_bin_raw, control_symbol_raw, control_word_hexbyte_raw, control_word_raw};
-use raw::{end_group_raw, newline_raw, rtf_text_raw, start_group_raw};
+use crate::raw::{
+    control_bin_raw, control_symbol_raw, control_word_hexbyte_raw, control_word_raw, end_group_raw,
+    newline_raw, rtf_text_raw, start_group_raw,
+};
 use std;
 
-use nom;
-use nom::types::CompleteByteSlice as Input;
+use nom::branch::alt;
+use nom::combinator::map;
+use nom::multi::many0;
+use nom::IResult;
 
-#[derive(Debug)]
-pub struct ParseError {
-    inner: nom::ErrorKind<u32>,
-}
-
-impl<I> std::convert::From<nom::Err<I, u32>> for ParseError {
-    fn from(error: nom::Err<I, u32>) -> Self {
-        Self {
-            inner: error.into_error_kind(),
-        }
-    }
-}
-
-impl std::fmt::Display for ParseError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "Parser Error: {}", self.inner.description())
-    }
-}
-
-impl std::error::Error for ParseError {}
-
-type Result<T> = std::result::Result<T, ParseError>;
+// #[derive(Debug)]
+// pub struct ParseError<I> {
+//     inner: nom::Err<I>,
+// }
+//
+// impl<I> std::convert::From<nom::Err<I>> for ParseError {
+//     fn from(error: nom::Err<I>) -> Self {
+//         Self {
+//             inner: error,
+//         }
+//     }
+// }
+//
+// impl std::fmt::Display for ParseError {
+//     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+//         write!(f, "Parser Error: {}", self.inner.description())
+//     }
+// }
+//
+// type Result<T> = std::result::Result<T, ParseError>;
 
 #[derive(PartialEq, Eq)]
 pub enum Token {
@@ -56,24 +58,24 @@ pub enum Token {
 impl std::fmt::Debug for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Token::ControlSymbol(c) => write!(f, "Token::ControlSymbol({})", c),
+            Token::ControlSymbol(c) => write!(f, "Token::ControlSymbol({c})"),
             Token::ControlWord { name, arg } => write!(
                 f,
                 "Token::ControlWord({}{})",
                 name,
-                arg.map(|i| format!(":{}", i)).unwrap_or_default()
+                arg.map(|i| format!(":{i}")).unwrap_or_default()
             ),
             Token::ControlBin(data) => {
                 write!(f, "Token::ControlBin(")?;
                 for byte in data {
-                    write!(f, " {:02x?}", byte)?;
+                    write!(f, " {byte:02x?}")?;
                 }
                 write!(f, ")")
             }
             Token::Text(data) => {
                 write!(f, "Token::Text(")?;
                 for byte in data {
-                    write!(f, " {:02x?}", byte)?;
+                    write!(f, " {byte:02x?}")?;
                 }
                 write!(f, ")")
             }
@@ -87,10 +89,10 @@ impl std::fmt::Debug for Token {
 impl Token {
     pub fn to_rtf(&self) -> Vec<u8> {
         match self {
-            Token::ControlSymbol(c) => format!("\\{}", c).as_bytes().to_vec(),
+            Token::ControlSymbol(c) => format!("\\{c}").as_bytes().to_vec(),
             Token::ControlWord { name, arg } => match arg {
-                Some(num) => format!("\\{}{}", name, num).as_bytes().to_vec(),
-                None => format!("\\{}", name).as_bytes().to_vec(),
+                Some(num) => format!("\\{name}{num}").as_bytes().to_vec(),
+                None => format!("\\{name}").as_bytes().to_vec(),
             },
             Token::ControlBin(data) => {
                 let mut rtf: Vec<u8> = Vec::with_capacity(12 + data.len());
@@ -181,72 +183,63 @@ impl Token {
 // handled specially, so hexbyte should be tested for before control symbols.
 //
 // See section "Conventions of an RTF Reader" in the RTF specification.
-named!(pub read_token<Input, Token>,
-    alt!(read_control_hexbyte | read_control_symbol | read_control_bin | read_control_word | read_start_group | read_end_group | read_newline | read_rtf_text)
-);
+pub fn read_token(input: &[u8]) -> IResult<&[u8], Token> {
+    alt((
+        read_control_hexbyte,
+        read_control_symbol,
+        read_control_bin,
+        read_control_word,
+        read_start_group,
+        read_end_group,
+        read_newline,
+        read_rtf_text,
+    ))(input)
+}
 
-named!(pub read_control_hexbyte<Input, Token>,
-    map!(
-        control_word_hexbyte_raw,
-        |(name, arg)| Token::ControlWord { name: String::from(name), arg }
-    )
-);
+pub fn read_control_hexbyte(input: &[u8]) -> IResult<&[u8], Token> {
+    map(control_word_hexbyte_raw, |(name, arg)| Token::ControlWord {
+        name: String::from(name),
+        arg,
+    })(input)
+}
 
-named!(pub read_control_symbol<Input, Token>,
-    map!(
-        control_symbol_raw,
-        Token::ControlSymbol
-    )
-);
+pub fn read_control_symbol(input: &[u8]) -> IResult<&[u8], Token> {
+    map(control_symbol_raw, Token::ControlSymbol)(input)
+}
 
-named!(pub read_control_word<Input, Token>,
-    map!(
-        control_word_raw,
-        |(name, arg)| Token::ControlWord { name: String::from(name), arg }
-    )
-);
+pub fn read_control_word(input: &[u8]) -> IResult<&[u8], Token> {
+    map(control_word_raw, |(name, arg)| Token::ControlWord {
+        name: String::from(name),
+        arg,
+    })(input)
+}
 
-named!(pub read_control_bin<Input, Token>,
-    map!(
-        control_bin_raw,
-        |bytes| Token::ControlBin(bytes.to_vec())
-    )
-);
+pub fn read_control_bin(input: &[u8]) -> IResult<&[u8], Token> {
+    map(control_bin_raw, |bytes| Token::ControlBin(bytes.to_vec()))(input)
+}
 
-named!(pub read_newline<Input, Token>,
-    map!(
-        newline_raw,
-        |_| Token::Newline
-    )
-);
+pub fn read_newline(input: &[u8]) -> IResult<&[u8], Token> {
+    map(newline_raw, |_| Token::Newline)(input)
+}
 
-named!(pub read_start_group<Input, Token>,
-    map!(
-        start_group_raw,
-        |_| Token::StartGroup
-    )
-);
+pub fn read_start_group(input: &[u8]) -> IResult<&[u8], Token> {
+    map(start_group_raw, |_| Token::StartGroup)(input)
+}
 
-named!(pub read_end_group<Input, Token>,
-    map!(
-        end_group_raw,
-        |_| Token::EndGroup
-    )
-);
+pub fn read_end_group(input: &[u8]) -> IResult<&[u8], Token> {
+    map(end_group_raw, |_| Token::EndGroup)(input)
+}
 
-named!(pub read_rtf_text<Input, Token>,
-    map!(
-        rtf_text_raw,
-        |text_bytes| Token::Text(text_bytes.to_vec())
-    )
-);
+pub fn read_rtf_text(input: &[u8]) -> IResult<&[u8], Token> {
+    map(rtf_text_raw, |text_bytes| Token::Text(text_bytes.to_vec()))(input)
+}
 
-named!(pub read_token_stream<Input, Vec<Token> >, many0!(read_token));
+pub fn read_token_stream(input: &[u8]) -> IResult<&[u8], Vec<Token>> {
+    many0(read_token)(input)
+}
 
-pub fn parse(bytes: &[u8]) -> Result<Vec<Token>> {
-    read_token_stream(Input(bytes))
-        .map_err(ParseError::from)
-        .map(|(_, tokens)| tokens)
+pub fn parse(bytes: &[u8]) -> IResult<&[u8], Vec<Token>> {
+    read_token_stream(bytes)
 }
 
 #[cfg(test)]
@@ -262,8 +255,8 @@ mod tests {
             Token::ControlSymbol('+'),
             Token::ControlSymbol('~'),
         ];
-        let syms_after_parse = Input(b"");
-        let syms = read_token_stream(Input(syms_str));
+        let syms_after_parse: &[u8] = b"";
+        let syms = read_token_stream(syms_str);
         assert_eq!(syms, Ok((syms_after_parse, valid_syms)));
     }
 
@@ -296,8 +289,8 @@ mod tests {
                 arg: Some(314159),
             },
         ];
-        let words_after_parse = Input(b"");
-        let words = read_token_stream(Input(words_str));
+        let words_after_parse: &[u8] = b"";
+        let words = read_token_stream(words_str);
         assert_eq!(words, Ok((words_after_parse, valid_words)));
     }
 
@@ -313,8 +306,8 @@ mod tests {
             Token::ControlBin(b"\x01".to_vec()),
             Token::ControlBin(b"\x02".to_vec()),
         ];
-        let bins_after_parse = Input(b"");
-        let bins = read_token_stream(Input(bins_str));
+        let bins_after_parse: &[u8] = b"";
+        let bins = read_token_stream(bins_str);
         assert_eq!(bins, Ok((bins_after_parse, valid_bins)));
     }
 
@@ -343,8 +336,8 @@ mod tests {
             Token::ControlBin(b"\x01".to_vec()),
             Token::ControlBin(b"\x02".to_vec()),
         ];
-        let controls_after_parse = Input(b"");
-        let controls = read_token_stream(Input(controls_str));
+        let controls_after_parse: &[u8] = b"";
+        let controls = read_token_stream(controls_str);
         assert_eq!(controls, Ok((controls_after_parse, valid_controls)));
     }
 
@@ -376,8 +369,8 @@ mod tests {
             },
             Token::EndGroup,
         ];
-        let group_content_after_parse = Input(b"");
-        let group_content = read_token_stream(Input(group_content_str));
+        let group_content_after_parse: &[u8] = b"";
+        let group_content = read_token_stream(group_content_str);
         assert_eq!(
             group_content,
             Ok((group_content_after_parse, valid_group_content))
@@ -387,37 +380,29 @@ mod tests {
     #[test]
     fn test_sample_doc() {
         let test_bytes = include_bytes!("../tests/sample.rtf");
-        if let Err(e) = parse(test_bytes) {
-            panic!("Parsing error: {:?}", e);
-        }
-        match read_token_stream(Input(test_bytes)) {
-            Ok((unparsed, _)) => assert_eq!(
-                unparsed.len(),
-                0,
-                "Unparsed data: {} bytes (first <=5 bytes: {:02X?})",
-                unparsed.len(),
-                &unparsed[0..std::cmp::min(5, unparsed.len())]
-            ),
-            Err(e) => panic!("Parsing error: {:?}", e),
-        }
+        parse(test_bytes).unwrap();
+        let (unparsed, _) = read_token_stream(test_bytes).unwrap();
+        assert_eq!(
+            unparsed.len(),
+            0,
+            "Unparsed data: {} bytes (first <=5 bytes: {:02X?})",
+            unparsed.len(),
+            &unparsed[0..std::cmp::min(5, unparsed.len())]
+        );
     }
 
     // The spec doc is interested because it has unmatched "{}" groups
     #[test]
     fn test_spec_doc() {
         let test_bytes = include_bytes!("../tests/RTF-Spec-1.7.rtf");
-        if let Err(e) = parse(test_bytes) {
-            panic!("Parsing error: {:?}", e);
-        }
-        match read_token_stream(Input(test_bytes)) {
-            Ok((unparsed, _)) => assert_eq!(
-                unparsed.len(),
-                0,
-                "Unparsed data: {} bytes (first <=5 bytes: {:02X?})",
-                unparsed.len(),
-                &unparsed[0..std::cmp::min(5, unparsed.len())]
-            ),
-            Err(e) => panic!("Parsing error: {:?}", e),
-        }
+        parse(test_bytes).unwrap();
+        let (unparsed, _) = read_token_stream(test_bytes).unwrap();
+        assert_eq!(
+            unparsed.len(),
+            0,
+            "Unparsed data: {} bytes (first <=5 bytes: {:02X?})",
+            unparsed.len(),
+            &unparsed[0..std::cmp::min(5, unparsed.len())]
+        );
     }
 }
