@@ -61,7 +61,8 @@ pub enum Token {
     Text(Vec<u8>),
     StartGroup,
     EndGroup,
-    Newline,
+    /// stores the actual bytes of newline found
+    Newline(Vec<u8>),
 }
 
 impl std::fmt::Debug for Token {
@@ -90,7 +91,13 @@ impl std::fmt::Debug for Token {
             }
             Token::StartGroup => write!(f, "Token::StartGroup"),
             Token::EndGroup => write!(f, "Token::EndGroup"),
-            Token::Newline => write!(f, "Token::Newline"),
+            Token::Newline(data) => {
+                write!(f, "Token::Newline(")?;
+                for byte in data {
+                    write!(f, " {byte:02x?}")?;
+                }
+                write!(f, ")")
+            }
         }
     }
 }
@@ -112,7 +119,7 @@ impl Token {
             Token::Text(data) => data.to_vec(),
             Token::StartGroup => b"{".to_vec(),
             Token::EndGroup => b"}".to_vec(),
-            Token::Newline => b"\r\n".to_vec(),
+            Token::Newline(data) => data.to_vec(),
         }
     }
 
@@ -228,7 +235,7 @@ pub fn read_control_bin(input: &[u8]) -> IResult<&[u8], Token> {
 }
 
 pub fn read_newline(input: &[u8]) -> IResult<&[u8], Token> {
-    map(newline_raw, |_| Token::Newline)(input)
+    map(newline_raw, |bytes| Token::Newline(bytes.to_vec()))(input)
 }
 
 pub fn read_start_group(input: &[u8]) -> IResult<&[u8], Token> {
@@ -360,7 +367,7 @@ mod tests {
     #[test]
     fn test_group_tokens() {
         // Have to be very careful here to insert crlf, regardless of host platform
-        let group_content_str = b"\\b Hello World \\b0 \\par\r\nThis is a test {\\*\\nothing}";
+        let group_content_str = b"\\b Hello World \\b0 \\par\r\nThis is a test {\\*\\nothing}\\\r";
         let valid_group_content = vec![
             Token::ControlWord {
                 name: "b".to_string(),
@@ -375,7 +382,7 @@ mod tests {
                 name: "par".to_string(),
                 arg: None,
             },
-            Token::Newline,
+            Token::Newline(vec![0x0d, 0x0a]),
             Token::Text(b"This is a test ".to_vec()),
             Token::StartGroup,
             Token::ControlSymbol('*'),
@@ -384,6 +391,7 @@ mod tests {
                 arg: None,
             },
             Token::EndGroup,
+            Token::ControlSymbol(0x0d.into()),
         ];
         let group_content_after_parse: &[u8] = b"";
         let group_content = read_token_stream(group_content_str);
