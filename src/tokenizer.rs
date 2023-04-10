@@ -112,7 +112,7 @@ impl Token {
             Token::Text(data) => data.to_vec(),
             Token::StartGroup => b"{".to_vec(),
             Token::EndGroup => b"}".to_vec(),
-            Token::Newline => b"\\r\\n".to_vec(),
+            Token::Newline => b"\r\n".to_vec(),
         }
     }
 
