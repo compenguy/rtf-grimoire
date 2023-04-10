@@ -465,9 +465,9 @@ mod tests {
     #[test]
     fn test_newline_raw() {
         let test_data: [(&[u8], &[u8], &[u8]); 3] = [
-            (b"\r\nabc", br#"abc"#, b"\r\n"), // CLRF
-            (b"\nabc", b"abc", b"\n"),        // \n
-            (b"\rabc", b"abc", b"\r"),        // \r
+            (b"\r\nabc", br#"abc"#, b"\r\n"), // CRLF
+            (b"\nabc", b"abc", b"\n"),        // LF
+            (b"\rabc", b"abc", b"\r"),        // CR
         ];
         for (input, remaining_input, parsed_output) in test_data {
             assert_eq!(Ok((remaining_input, parsed_output)), newline_raw(input));
@@ -477,9 +477,9 @@ mod tests {
     #[test]
     fn test_newline_raw_invalid() {
         let test_data: [(&[u8], &[u8], ErrorKind); 3] = [
-            (b"a\r\nbc", b"a\r\nbc", ErrorKind::Tag), //CLRF
-            (b"a\nbc", b"a\nbc", ErrorKind::Tag),     // \n
-            (b"a\rbc", b"a\rbc", ErrorKind::Tag),     // \r
+            (b"a\r\nbc", b"a\r\nbc", ErrorKind::Tag), // CRLF
+            (b"a\nbc", b"a\nbc", ErrorKind::Tag),     // LF
+            (b"a\rbc", b"a\rbc", ErrorKind::Tag),     // CR
         ];
         for (input, remaining_input, error_kind) in test_data {
             assert_eq!(
