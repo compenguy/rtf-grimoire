@@ -1,6 +1,6 @@
 [package]
 name = "rtf-grimoire"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Will Page <compenguy@gmail.com>"]
 description = "A Rich Text File (RTF) document tokenizer. Useful for writing RTF parsers."
 homepage = "https://github.com/compenguy/rtf-grimoire"
